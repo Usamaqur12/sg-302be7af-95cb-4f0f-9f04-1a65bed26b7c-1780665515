@@ -24,7 +24,7 @@ export const authService = {
           .from("seller_profiles")
           .insert({
             user_id: authData.user.id,
-            business_name: "" as any,
+            business_name: "New Seller",
             verification_status: "pending" as any,
           });
 
