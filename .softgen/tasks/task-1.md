@@ -1,6 +1,6 @@
 ---
 title: Database Schema & Authentication
-status: in_progress
+status: done
 priority: urgent
 type: feature
 tags: [backend, database, auth]
@@ -13,22 +13,22 @@ position: 1
 Foundation layer: complete database schema with all tables, relationships, RLS policies, and role-based authentication system. Three user roles (customer, seller, admin) with proper permissions.
 
 ## Checklist
-- [ ] Create users table with role enum
-- [ ] Create seller_profiles table (KYC, verification status, commission)
-- [ ] Create categories and subcategories tables
-- [ ] Create products table (seller FK, category FK, approval status)
-- [ ] Create product_images table
-- [ ] Create cart and cart_items tables
-- [ ] Create orders table with status tracking
-- [ ] Create order_items table
-- [ ] Create payments table
-- [ ] Create seller_earnings and withdrawal_requests tables
-- [ ] Create reviews and ratings table
-- [ ] Create wishlists table
-- [ ] Create coupons, banners, support_tickets tables
-- [ ] Set up RLS policies for all tables (role-based access)
-- [ ] Create auth triggers for user profile creation
-- [ ] Generate TypeScript types
+- [x] Create users table with role enum
+- [x] Create seller_profiles table (KYC, verification status, commission)
+- [x] Create categories and subcategories tables
+- [x] Create products table (seller FK, category FK, approval status)
+- [x] Create product_images table
+- [x] Create cart and cart_items tables
+- [x] Create orders table with status tracking
+- [x] Create order_items table
+- [x] Create payments table
+- [x] Create seller_earnings and withdrawal_requests tables
+- [x] Create reviews and ratings table
+- [x] Create wishlists table
+- [x] Create coupons, banners, support_tickets tables
+- [x] Set up RLS policies for all tables (role-based access)
+- [x] Create auth triggers for user profile creation
+- [x] Generate TypeScript types
 
 ## Acceptance
 - All tables exist with proper relationships and constraints
