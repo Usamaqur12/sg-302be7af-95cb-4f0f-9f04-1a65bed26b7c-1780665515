@@ -49,10 +49,19 @@ export default function CheckoutPage() {
     setLoading(true);
 
     try {
+      // Get default commission rate from settings
+      const { data: settingsData } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "commission_rate")
+        .single();
+
+      const commissionRate = settingsData ? parseFloat(settingsData.value) : 10;
+
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
-          user_id: user.id,
+          customer_id: user.id,
           total_amount: finalTotal,
           shipping_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
           phone: formData.phone,
@@ -64,18 +73,42 @@ export default function CheckoutPage() {
 
       if (orderError) throw orderError;
 
-      const orderItems = items.map((item) => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        seller_id: item.product.seller?.id,
-        quantity: item.quantity,
-        price: item.product.price,
-        subtotal: item.product.price * item.quantity,
-      }));
+      // Fetch complete product and seller data for order items
+      const orderItemsWithDetails = await Promise.all(
+        items.map(async (item) => {
+          const { data: productData } = await supabase
+            .from("products")
+            .select(`
+              seller_id,
+              title,
+              images:product_images(url)
+            `)
+            .eq("id", item.product_id)
+            .single();
+
+          const itemSubtotal = item.product.price * item.quantity;
+          const commissionAmount = (itemSubtotal * commissionRate) / 100;
+          const sellerEarnings = itemSubtotal - commissionAmount;
+
+          return {
+            order_id: order.id,
+            product_id: item.product_id,
+            seller_id: productData?.seller_id || "",
+            quantity: item.quantity,
+            price: item.product.price,
+            subtotal: itemSubtotal,
+            commission_rate: commissionRate,
+            commission_amount: commissionAmount,
+            seller_earnings: sellerEarnings,
+            product_title: productData?.title || item.product.title,
+            product_image: productData?.images?.[0]?.url || null,
+          };
+        })
+      );
 
       const { error: itemsError } = await supabase
         .from("order_items")
-        .insert(orderItems);
+        .insert(orderItemsWithDetails);
 
       if (itemsError) throw itemsError;
 

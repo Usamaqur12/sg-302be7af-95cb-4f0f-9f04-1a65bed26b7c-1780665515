@@ -83,6 +83,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Get product price for price_at_addition
+    const { data: productData } = await supabase
+      .from("products")
+      .select("price")
+      .eq("id", productId)
+      .single();
+
+    if (!productData) {
+      alert("Product not found");
+      return;
+    }
+
     let { data: cart } = await supabase
       .from("carts")
       .select("id")
@@ -118,6 +130,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             cart_id: cart.id,
             product_id: productId,
             quantity,
+            price_at_addition: productData.price,
           });
       }
 
