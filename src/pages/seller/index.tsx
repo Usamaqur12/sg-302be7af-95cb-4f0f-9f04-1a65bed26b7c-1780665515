@@ -48,21 +48,35 @@ export default function SellerDashboard() {
           .select("*", { count: "exact", head: true })
           .eq("seller_id", sellerProfile.id);
 
-        const { count: ordersCount } = await supabase
+        // Simplified approach: get order_items first, then filter by order status
+        const { data: orderItemsData } = await supabase
           .from("order_items")
-          .select("*", { count: "exact", head: true })
-          .eq("seller_id", sellerProfile.id)
-          .in("order:orders!inner(status)", ["pending", "processing", "shipped"]);
-
-        const { data: earningsData } = await supabase
-          .from("order_items")
-          .select("seller_earnings")
+          .select("order_id, seller_earnings")
           .eq("seller_id", sellerProfile.id);
 
-        const totalEarnings = earningsData?.reduce(
-          (sum, item) => sum + (item.seller_earnings || 0),
-          0
-        ) || 0;
+        let activeOrdersCount = 0;
+        let totalEarnings = 0;
+
+        if (orderItemsData && orderItemsData.length > 0) {
+          const orderIds = [...new Set(orderItemsData.map(item => item.order_id))];
+          
+          const { data: ordersData } = await supabase
+            .from("orders")
+            .select("id, status")
+            .in("id", orderIds);
+
+          const activeOrderIds = new Set(
+            ordersData?.filter(order => 
+              ["pending", "processing", "shipped"].includes(order.status)
+            ).map(order => order.id) || []
+          );
+
+          activeOrdersCount = activeOrderIds.size;
+          totalEarnings = orderItemsData.reduce(
+            (sum, item) => sum + (item.seller_earnings || 0),
+            0
+          );
+        }
 
         const { count: withdrawalsCount } = await supabase
           .from("withdrawal_requests")
@@ -72,7 +86,7 @@ export default function SellerDashboard() {
 
         setStats({
           totalProducts: productsCount || 0,
-          activeOrders: ordersCount || 0,
+          activeOrders: activeOrdersCount,
           totalEarnings,
           pendingWithdrawals: withdrawalsCount || 0,
         });
