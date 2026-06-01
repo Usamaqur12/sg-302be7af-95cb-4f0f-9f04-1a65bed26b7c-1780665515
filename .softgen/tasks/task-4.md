@@ -1,6 +1,6 @@
 ---
 title: Seller Dashboard & Product Management
-status: todo
+status: in_progress
 priority: high
 type: feature
 tags: [frontend, seller, dashboard]
