@@ -15,11 +15,11 @@ import { ProductCard } from "@/components/ProductCard";
 
 interface ProductDetail {
   id: string;
-  name: string;
+  title: string;
   description: string;
   price: number;
   compare_at_price: number | null;
-  stock: number;
+  stock_quantity: number;
   sku: string;
   rating: number;
   total_reviews: number;
@@ -47,7 +47,7 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || typeof id !== 'string') return;
 
     async function fetchProduct() {
       const { data: productData } = await supabase
@@ -58,12 +58,12 @@ export default function ProductDetailPage() {
           category:categories(id, name, slug),
           seller:seller_profiles(id, business_name, rating, total_reviews)
         `)
-        .eq("id", id)
+        .eq("id", id as string)
         .eq("status", "approved")
         .single();
 
       if (productData) {
-        setProduct(productData);
+        setProduct(productData as any);
 
         const { data: reviewsData } = await supabase
           .from("reviews")
@@ -74,7 +74,7 @@ export default function ProductDetailPage() {
             created_at,
             user:profiles(full_name)
           `)
-          .eq("product_id", id)
+          .eq("product_id", id as string)
           .order("created_at", { ascending: false })
           .limit(10);
 
@@ -84,7 +84,7 @@ export default function ProductDetailPage() {
           .from("products")
           .select(`
             id,
-            name,
+            title,
             price,
             compare_at_price,
             rating,
@@ -94,7 +94,7 @@ export default function ProductDetailPage() {
           `)
           .eq("category_id", productData.category.id)
           .eq("status", "approved")
-          .neq("id", id)
+          .neq("id", id as string)
           .limit(4);
 
         setRelatedProducts(relatedData || []);
@@ -155,7 +155,7 @@ export default function ProductDetailPage() {
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>{product.name}</BreadcrumbPage>
+              <BreadcrumbPage>{product.title}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -165,7 +165,7 @@ export default function ProductDetailPage() {
             <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-4 relative">
               <Image
                 src={images[selectedImage]?.image_url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop"}
-                alt={product.name}
+                alt={product.title}
                 fill
                 className="object-cover"
                 priority
@@ -189,7 +189,7 @@ export default function ProductDetailPage() {
                   >
                     <Image
                       src={img.image_url}
-                      alt={`${product.name} ${idx + 1}`}
+                      alt={`${product.title} ${idx + 1}`}
                       width={200}
                       height={200}
                       className="object-cover w-full h-full"
@@ -201,7 +201,7 @@ export default function ProductDetailPage() {
           </div>
 
           <div>
-            <h1 className="text-3xl font-bold mb-4">{product.name}</h1>
+            <h1 className="text-3xl font-bold mb-4">{product.title}</h1>
 
             <div className="flex items-center gap-4 mb-4">
               <div className="flex items-center gap-1">
@@ -235,7 +235,7 @@ export default function ProductDetailPage() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                Stock: <span className="font-medium">{product.stock} units available</span>
+                Stock: <span className="font-medium">{product.stock_quantity} units available</span>
               </p>
             </div>
 
@@ -253,8 +253,8 @@ export default function ProductDetailPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                  disabled={quantity >= product.stock}
+                  onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
+                  disabled={quantity >= product.stock_quantity}
                 >
                   +
                 </Button>
@@ -343,7 +343,7 @@ export default function ProductDetailPage() {
                 <ProductCard
                   key={relatedProduct.id}
                   id={relatedProduct.id}
-                  title={relatedProduct.name}
+                  title={relatedProduct.title}
                   price={relatedProduct.price}
                   compareAtPrice={relatedProduct.compare_at_price || undefined}
                   image={relatedProduct.images[0]?.image_url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}

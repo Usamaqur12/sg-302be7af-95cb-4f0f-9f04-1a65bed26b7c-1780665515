@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface Product {
   id: string;
-  name: string;
+  title: string;
   price: number;
   compare_at_price: number | null;
   images: { image_url: string }[];
@@ -38,13 +38,13 @@ export default function CategoryPage() {
   const [priceRange, setPriceRange] = useState([0, 5000]);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || typeof slug !== 'string') return;
 
     async function fetchCategoryAndProducts() {
       const { data: categoryData } = await supabase
         .from("categories")
         .select("*")
-        .eq("slug", slug)
+        .eq("slug", slug as string)
         .single();
 
       if (categoryData) {
@@ -54,7 +54,7 @@ export default function CategoryPage() {
           .from("products")
           .select(`
             id,
-            name,
+            title,
             price,
             compare_at_price,
             rating,
@@ -195,7 +195,7 @@ export default function CategoryPage() {
                   <ProductCard
                     key={product.id}
                     id={product.id}
-                    title={product.name}
+                    title={product.title}
                     price={product.price}
                     compareAtPrice={product.compare_at_price || undefined}
                     image={product.images[0]?.image_url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}
