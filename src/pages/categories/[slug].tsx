@@ -15,7 +15,7 @@ interface Product {
   title: string;
   price: number;
   compare_at_price: number | null;
-  images: { image_url: string }[];
+  images: { url: string }[];
   rating: number;
   total_reviews: number;
   seller: { business_name: string };
@@ -59,7 +59,7 @@ export default function CategoryPage() {
             compare_at_price,
             rating,
             total_reviews,
-            images:product_images(image_url),
+            images:product_images(url),
             seller:seller_profiles(business_name)
           `)
           .eq("category_id", categoryData.id)
@@ -198,7 +198,7 @@ export default function CategoryPage() {
                     title={product.title}
                     price={product.price}
                     compareAtPrice={product.compare_at_price || undefined}
-                    image={product.images[0]?.image_url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}
+                    image={product.images[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}
                     rating={product.rating}
                     reviewCount={product.total_reviews}
                     sellerName={product.seller?.business_name || "Unknown Seller"}

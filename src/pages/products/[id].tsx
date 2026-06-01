@@ -23,7 +23,7 @@ interface ProductDetail {
   sku: string;
   rating: number;
   total_reviews: number;
-  images: { id: string; image_url: string; display_order: number }[];
+  images: { id: string; url: string; display_order: number }[];
   category: { id: string; name: string; slug: string };
   seller: { id: string; business_name: string; rating: number; total_reviews: number };
 }
@@ -54,7 +54,7 @@ export default function ProductDetailPage() {
         .from("products")
         .select(`
           *,
-          images:product_images(id, image_url, display_order),
+          images:product_images(id, url, display_order),
           category:categories(id, name, slug),
           seller:seller_profiles(id, business_name, rating, total_reviews)
         `)
@@ -89,7 +89,7 @@ export default function ProductDetailPage() {
             compare_at_price,
             rating,
             total_reviews,
-            images:product_images(image_url),
+            images:product_images(url),
             seller:seller_profiles(business_name)
           `)
           .eq("category_id", productData.category.id)
@@ -164,7 +164,7 @@ export default function ProductDetailPage() {
           <div>
             <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-4 relative">
               <Image
-                src={images[selectedImage]?.image_url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop"}
+                src={images[selectedImage]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop"}
                 alt={product.title}
                 fill
                 className="object-cover"
@@ -188,7 +188,7 @@ export default function ProductDetailPage() {
                     }`}
                   >
                     <Image
-                      src={img.image_url}
+                      src={img.url}
                       alt={`${product.title} ${idx + 1}`}
                       width={200}
                       height={200}
@@ -346,7 +346,7 @@ export default function ProductDetailPage() {
                   title={relatedProduct.title}
                   price={relatedProduct.price}
                   compareAtPrice={relatedProduct.compare_at_price || undefined}
-                  image={relatedProduct.images[0]?.image_url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}
+                  image={relatedProduct.images[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}
                   rating={relatedProduct.rating}
                   reviewCount={relatedProduct.total_reviews}
                   sellerName={relatedProduct.seller?.business_name || "Unknown"}
