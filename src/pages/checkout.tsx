@@ -49,23 +49,37 @@ export default function CheckoutPage() {
     setLoading(true);
 
     try {
-      // Get default commission rate from settings
+      // Get default commission rate from system_settings
       const { data: settingsData } = await supabase
-        .from("settings")
+        .from("system_settings")
         .select("value")
         .eq("key", "commission_rate")
         .single();
 
-      const commissionRate = settingsData ? parseFloat(settingsData.value) : 10;
+      const commissionRate = settingsData ? parseFloat(settingsData.value as any) : 10;
+
+      // Generate unique order number
+      const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
+          order_number: orderNumber,
           customer_id: user.id,
-          total_amount: finalTotal,
-          shipping_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
-          phone: formData.phone,
-          notes: formData.notes,
+          subtotal: total,
+          tax: taxAmount,
+          shipping_cost: shippingCost,
+          discount: 0,
+          total: finalTotal,
+          shipping_full_name: formData.fullName,
+          shipping_phone: formData.phone,
+          shipping_address: formData.address,
+          shipping_city: formData.city,
+          shipping_state: formData.state,
+          shipping_postal_code: formData.zipCode,
+          shipping_country: formData.country,
+          billing_same_as_shipping: true,
+          notes: formData.notes || null,
           status: "pending",
         })
         .select()
