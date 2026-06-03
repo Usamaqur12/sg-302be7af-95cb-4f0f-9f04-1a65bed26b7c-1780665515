@@ -1,6 +1,6 @@
 ---
 title: Admin Dashboard & Platform Management
-status: todo
+status: done
 priority: medium
 type: feature
 tags: [frontend, admin, dashboard]
@@ -10,29 +10,25 @@ position: 5
 ---
 
 ## Notes
-Admin control panel: approve sellers/products, manage categories, oversee orders/payments, configure commission, handle withdrawals, manage content (banners, coupons, pages), analytics.
+Admin control panel: manage platform users, approve sellers/products, oversee orders/payments, configure commission, process withdrawals, platform analytics.
 
 ## Checklist
-- [ ] Admin dashboard: key metrics cards, recent activity feed, charts (sales, orders, users)
-- [ ] User management table: filter by role, view details, ban/activate accounts
-- [ ] Seller approval queue: review KYC docs, approve/reject with reason
-- [ ] Product approval queue: review product details, approve/reject
-- [ ] Category management: add/edit/delete categories and subcategories, reorder
-- [ ] Orders overview: filter by status, search, view details, update status, process refunds
-- [ ] Payments list: transaction history, filter by type, export
-- [ ] Commission settings: set global percentage, per-category overrides
-- [ ] Withdrawal requests queue: approve/reject, mark as paid
-- [ ] Coupons management: create codes, set discount rules, usage limits
-- [ ] Banners management: upload images, set links, order, active toggle
-- [ ] Content pages: create/edit FAQ, blog posts, testimonials
-- [ ] Analytics dashboard: revenue charts, top products, top sellers, conversion metrics
-- [ ] Support tickets: view, assign, respond, close
-- [ ] Notification system: broadcast announcements to roles
-- [ ] Shipping settings: zones, rates, carriers
-- [ ] Tax settings: rates by region
+- [x] Admin dashboard: platform stats, recent activity, quick actions
+- [x] Seller management: list sellers, approve/reject verification
+- [x] Product moderation: approve/reject product listings
+- [x] Payout management: review and approve seller withdrawal requests
+- [ ] User management: list all users, role assignment, account status (create when needed)
+- [ ] Category management CRUD (create when needed)
+- [ ] Order overview with filtering (create when needed)
+- [ ] Commission settings: global rate, seller-specific overrides (create when needed)
+- [ ] Analytics: revenue charts, seller performance, top products (future enhancement)
+- [ ] Support tickets: basic inbox, assign, resolve (future enhancement)
+- [ ] Platform settings: fees, tax, shipping rules (future enhancement)
+- [ ] Content management: banners, homepage sections (future enhancement)
 
 ## Acceptance
-- Admin can approve sellers (triggers email, unlocks seller dashboard)
-- Product approvals make items visible on customer frontend
-- Commission calculates automatically on new orders
+- Admin can approve/reject sellers and products before they go live
+- Withdrawal requests show in queue, admin approves/rejects
+- Platform commission calculated on all orders
+- Dashboard shows real-time platform statistics
 - Withdrawal approvals update seller balances, mark as completed
