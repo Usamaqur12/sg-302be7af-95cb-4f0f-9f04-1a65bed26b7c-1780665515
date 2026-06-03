@@ -5,13 +5,16 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Heart, ShoppingCart, Star, Shield, Truck, RotateCcw, Store } from "lucide-react";
-import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
-import Image from "next/image";
-import Link from "next/link";
+import { ReviewForm } from "@/components/ReviewForm";
+import { ReviewList } from "@/components/ReviewList";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { ProductCard } from "@/components/ProductCard";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import Link from "next/link";
+import Image from "next/image";
+import { Star, ShoppingCart, Heart, Package, Shield, TruckIcon, Store } from "lucide-react";
+import { analytics } from "@/lib/analytics";
 
 interface ProductDetail {
   id: string;
@@ -31,12 +34,15 @@ interface ProductDetail {
 interface Review {
   id: string;
   rating: number;
-  comment: string;
+  comment: string | null;
   created_at: string;
-  user: { full_name: string };
+  user: {
+    full_name: string;
+  };
 }
 
 export default function ProductDetailPage() {
+  const { user } = useAuth();
   const router = useRouter();
   const { id } = router.query;
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -45,6 +51,7 @@ export default function ProductDetailPage() {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [reviewRefreshTrigger, setReviewRefreshTrigger] = useState(0);
 
   useEffect(() => {
     if (!id || typeof id !== 'string') return;
@@ -64,6 +71,15 @@ export default function ProductDetailPage() {
 
       if (productData) {
         setProduct(productData as any);
+
+        // Track product view
+        analytics.productViewed({
+          id: productData.id,
+          name: productData.title,
+          price: productData.price,
+          category: productData.category?.name,
+          seller: productData.seller?.business_name,
+        });
 
         const { data: reviewsData } = await supabase
           .from("reviews")
@@ -105,18 +121,16 @@ export default function ProductDetailPage() {
     fetchProduct();
   }, [id]);
 
+  const handleReviewSubmitted = () => {
+    // Trigger review list refresh
+    setReviewRefreshTrigger((prev) => prev + 1);
+  };
+
   if (loading) {
     return (
       <CustomerLayout>
-        <div className="container py-8">
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="aspect-square bg-muted animate-pulse rounded-lg" />
-            <div className="space-y-4">
-              <div className="h-8 w-3/4 bg-muted animate-pulse rounded" />
-              <div className="h-6 w-1/2 bg-muted animate-pulse rounded" />
-              <div className="h-12 w-1/3 bg-muted animate-pulse rounded" />
-            </div>
-          </div>
+        <div className="container py-16 text-center">
+          <p className="text-muted-foreground">Loading product...</p>
         </div>
       </CustomerLayout>
     );
@@ -127,7 +141,8 @@ export default function ProductDetailPage() {
       <CustomerLayout>
         <div className="container py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Product Not Found</h1>
-          <Button onClick={() => router.push("/")}>Go Home</Button>
+          <p className="text-muted-foreground mb-6">The product you're looking for doesn't exist or has been removed.</p>
+          <Button onClick={() => router.push("/")}>Back to Home</Button>
         </div>
       </CustomerLayout>
     );
@@ -278,14 +293,14 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Truck className="h-5 w-5 text-accent" />
+                  <TruckIcon className="h-5 w-5 text-accent" />
                   <div>
                     <p className="font-medium">Fast Shipping</p>
                     <p className="text-sm text-muted-foreground">Free delivery on orders over $50</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <RotateCcw className="h-5 w-5 text-accent" />
+                  <Package className="h-5 w-5 text-accent" />
                   <div>
                     <p className="font-medium">Easy Returns</p>
                     <p className="text-sm text-muted-foreground">30-day return policy</p>
@@ -307,31 +322,20 @@ export default function ProductDetailPage() {
             </div>
           </TabsContent>
           <TabsContent value="reviews" className="mt-6">
-            {reviews.length > 0 ? (
-              <div className="space-y-6">
-                {reviews.map((review) => (
-                  <Card key={review.id} className="p-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="font-medium">{review.user?.full_name || "Anonymous"}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(review.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-warning text-warning" />
-                        <span className="font-medium font-mono">{review.rating.toFixed(1)}</span>
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground">{review.comment}</p>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                No reviews yet. Be the first to review this product!
-              </div>
-            )}
+            <div className="space-y-8">
+              <ReviewForm 
+                productId={product.id} 
+                productTitle={product.title}
+                onReviewSubmitted={handleReviewSubmitted}
+              />
+              
+              <Separator />
+              
+              <ReviewList 
+                productId={product.id}
+                refreshTrigger={reviewRefreshTrigger}
+              />
+            </div>
           </TabsContent>
         </Tabs>
 
