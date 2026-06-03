@@ -12,126 +12,42 @@ export interface SearchFilters {
 }
 
 export interface SearchResult {
-  id: string;
-  title: string;
-  slug: string;
-  description: string;
-  price: number;
-  compare_at_price: number | null;
-  rating: number;
-  total_reviews: number;
-  images: { url: string }[];
-  seller: { business_name: string };
+  products: any[];
+  total: number;
+  facets?: {
+    categories: { id: string; name: string; count: number }[];
+    priceRanges: { min: number; max: number; count: number }[];
+  };
+}
+
+/**
+ * Search products with full-text search and filters
+ */
+export async function searchProducts(filters: SearchFilters): Promise<SearchResult> {
+  const query = supabase.rpc("search_products", {
+    search_query: filters.query || "",
+    category_filter: filters.categoryId,
+    min_price: filters.minPrice,
+    max_price: filters.maxPrice,
+    min_rating: filters.minRating,
+    result_limit: filters.limit || 20,
+    result_offset: filters.offset || 0,
+  });
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Search error:", error);
+    return { products: [], total: 0 };
+  }
+
+  return {
+    products: data || [],
+    total: data?.length || 0,
+  };
 }
 
 export const searchService = {
-  /**
-   * Search products with full-text search and filters
-   */
-  async searchProducts(filters: SearchFilters): Promise<{
-    products: SearchResult[];
-    total: number;
-  }> {
-    const {
-      query,
-      categoryId,
-      minPrice,
-      maxPrice,
-      minRating,
-      sortBy = "relevance",
-      limit = 20,
-      offset = 0,
-    } = filters;
-
-    // Build query
-    let dbQuery = supabase
-      .from("products")
-      .select(
-        `
-        id,
-        title,
-        slug,
-        description,
-        price,
-        compare_at_price,
-        rating,
-        total_reviews,
-        images:product_images(url),
-        seller:seller_profiles(business_name)
-      `,
-        { count: "exact" }
-      )
-      .eq("status", "approved");
-
-    // Apply full-text search if query provided
-    if (query && query.trim()) {
-      // Use PostgreSQL full-text search
-      dbQuery = dbQuery.textSearch("search_vector", query, {
-        type: "websearch",
-        config: "english",
-      });
-    }
-
-    // Apply filters
-    if (categoryId) {
-      dbQuery = dbQuery.eq("category_id", categoryId);
-    }
-
-    if (minPrice !== undefined) {
-      dbQuery = dbQuery.gte("price", minPrice);
-    }
-
-    if (maxPrice !== undefined) {
-      dbQuery = dbQuery.lte("price", maxPrice);
-    }
-
-    if (minRating !== undefined) {
-      dbQuery = dbQuery.gte("rating", minRating);
-    }
-
-    // Apply sorting
-    switch (sortBy) {
-      case "price_asc":
-        dbQuery = dbQuery.order("price", { ascending: true });
-        break;
-      case "price_desc":
-        dbQuery = dbQuery.order("price", { ascending: false });
-        break;
-      case "rating":
-        dbQuery = dbQuery.order("rating", { ascending: false });
-        break;
-      case "newest":
-        dbQuery = dbQuery.order("created_at", { ascending: false });
-        break;
-      case "relevance":
-      default:
-        // Relevance is handled by text search ranking
-        if (query && query.trim()) {
-          // For text search, results are already sorted by relevance
-          dbQuery = dbQuery.order("rating", { ascending: false });
-        } else {
-          // No search query, sort by rating + reviews
-          dbQuery = dbQuery.order("rating", { ascending: false });
-        }
-        break;
-    }
-
-    // Apply pagination
-    dbQuery = dbQuery.range(offset, offset + limit - 1);
-
-    const { data, count, error } = await dbQuery;
-
-    if (error) {
-      console.error("Search error:", error);
-      throw error;
-    }
-
-    return {
-      products: (data as any) || [],
-      total: count || 0,
-    };
-  },
-
   /**
    * Get search suggestions based on query
    */

@@ -28,6 +28,9 @@ export const analytics = {
   },
 
   // User identification
+  /**
+   * Identify a user
+   */
   identify: (userId: string, properties?: Record<string, any>) => {
     if (typeof window !== "undefined" && posthog) {
       posthog.identify(userId, properties);
@@ -150,6 +153,18 @@ export const analytics = {
       posthog.capture("search", {
         search_query: query,
         results_count: resultsCount,
+      });
+    }
+  },
+
+  /**
+   * Track search performed
+   */
+  searchPerformed: (query: string, resultCount: number) => {
+    if (typeof window !== "undefined" && posthog) {
+      posthog.capture("search_performed", {
+        query,
+        result_count: resultCount,
       });
     }
   },

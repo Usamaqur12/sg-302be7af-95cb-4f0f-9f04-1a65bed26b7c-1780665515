@@ -61,7 +61,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await authService.signUp({
+      const result = await authService.signUp({
         email: formData.email,
         password: formData.password,
         fullName: formData.fullName,
@@ -74,10 +74,12 @@ export default function RegisterPage() {
       });
 
       // Track registration
-      analytics.identify({
-        email: formData.email,
-        name: formData.fullName,
-      });
+      if (result.user) {
+        analytics.identify(result.user.id, {
+          email: formData.email,
+          name: formData.fullName,
+        });
+      }
 
       // Redirect to login page
       router.push("/auth/login");

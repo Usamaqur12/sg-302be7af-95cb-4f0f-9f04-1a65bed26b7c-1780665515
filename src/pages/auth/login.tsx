@@ -28,7 +28,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await authService.signIn(formData);
+      const result = await authService.signIn(formData);
       
       toast({
         title: "Welcome back!",
@@ -36,9 +36,11 @@ export default function LoginPage() {
       });
 
       // Track login
-      analytics.identify({
-        email: formData.email,
-      });
+      if (result.user) {
+        analytics.identify(result.user.id, {
+          email: formData.email,
+        });
+      }
 
       // Redirect to account dashboard
       router.push("/account/dashboard");

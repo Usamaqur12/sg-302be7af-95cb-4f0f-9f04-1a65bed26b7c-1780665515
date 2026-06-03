@@ -35,7 +35,7 @@ interface Product {
 
 export default function SearchPage() {
   const router = useRouter();
-  const { q, category, minPrice, maxPrice, minRating } = router.query;
+  const { q, categoryId, minPrice, maxPrice, minRating } = router.query;
 
   const [searchQuery, setSearchQuery] = useState((q as string) || "");
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,7 +45,7 @@ export default function SearchPage() {
 
   const [filters, setFilters] = useState<SearchFilters>({
     query: (q as string) || "",
-    category: category as string,
+    categoryId: categoryId as string,
     minPrice: minPrice ? parseFloat(minPrice as string) : undefined,
     maxPrice: maxPrice ? parseFloat(maxPrice as string) : undefined,
     minRating: minRating ? parseFloat(minRating as string) : undefined,
@@ -63,7 +63,7 @@ export default function SearchPage() {
     
     const searchFilters: SearchFilters = {
       query: (q as string) || "",
-      category: category as string,
+      categoryId: categoryId as string,
       minPrice: minPrice ? parseFloat(minPrice as string) : undefined,
       maxPrice: maxPrice ? parseFloat(maxPrice as string) : undefined,
       minRating: minRating ? parseFloat(minRating as string) : undefined,
@@ -87,7 +87,7 @@ export default function SearchPage() {
     e.preventDefault();
     const queryParams = new URLSearchParams();
     if (searchQuery) queryParams.set("q", searchQuery);
-    if (filters.category) queryParams.set("category", filters.category);
+    if (filters.categoryId) queryParams.set("categoryId", filters.categoryId);
     if (filters.minPrice) queryParams.set("minPrice", filters.minPrice.toString());
     if (filters.maxPrice) queryParams.set("maxPrice", filters.maxPrice.toString());
     if (filters.minRating) queryParams.set("minRating", filters.minRating.toString());
@@ -102,7 +102,7 @@ export default function SearchPage() {
   const applyFilters = () => {
     const queryParams = new URLSearchParams();
     if (searchQuery) queryParams.set("q", searchQuery);
-    if (filters.category) queryParams.set("category", filters.category);
+    if (filters.categoryId) queryParams.set("categoryId", filters.categoryId);
     if (filters.minPrice) queryParams.set("minPrice", filters.minPrice.toString());
     if (filters.maxPrice) queryParams.set("maxPrice", filters.maxPrice.toString());
     if (filters.minRating) queryParams.set("minRating", filters.minRating.toString());
@@ -121,7 +121,7 @@ export default function SearchPage() {
   };
 
   const activeFiltersCount = [
-    filters.category,
+    filters.categoryId,
     filters.minPrice,
     filters.maxPrice,
     filters.minRating,
@@ -187,9 +187,9 @@ export default function SearchPage() {
                   <div>
                     <Label className="mb-2 block">Category</Label>
                     <Select
-                      value={filters.category || "all"}
+                      value={filters.categoryId || "all"}
                       onValueChange={(value) =>
-                        handleFilterChange("category", value === "all" ? undefined : value)
+                        handleFilterChange("categoryId", value === "all" ? undefined : value)
                       }
                     >
                       <SelectTrigger>
@@ -300,13 +300,13 @@ export default function SearchPage() {
             {/* Active Filters */}
             {activeFiltersCount > 0 && (
               <div className="flex flex-wrap gap-2 mb-6">
-                {filters.category && (
+                {filters.categoryId && (
                   <Badge variant="secondary" className="gap-2">
-                    Category: {filters.category}
+                    Category: {filters.categoryId}
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => {
-                        handleFilterChange("category", undefined);
+                        handleFilterChange("categoryId", undefined);
                         applyFilters();
                       }}
                     />
