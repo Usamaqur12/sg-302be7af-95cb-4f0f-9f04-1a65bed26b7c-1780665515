@@ -1,87 +1,99 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/database.types";
 
-type UserRole = "customer" | "seller" | "admin";
-type SellerProfileInsert = Database["public"]["Tables"]["seller_profiles"]["Insert"];
+export interface SignUpData {
+  email: string;
+  password: string;
+  fullName: string;
+  phone?: string;
+}
+
+export interface SignInData {
+  email: string;
+  password: string;
+}
 
 export const authService = {
-  async signUp(email: string, password: string, role: UserRole = "customer") {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
+  /**
+   * Sign up a new user
+   */
+  signUp: async (data: SignUpData) => {
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          full_name: data.fullName,
+          phone: data.phone,
+        },
+      },
     });
 
-    if (authError) throw authError;
-
-    if (authData.user) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ role })
-        .eq("id", authData.user.id);
-
-      if (profileError) throw profileError;
-
-      if (role === "seller") {
-        const sellerProfile: SellerProfileInsert = {
-          user_id: authData.user.id,
-          business_name: "New Seller",
-        };
-
-        const { error: sellerError } = await supabase
-          .from("seller_profiles")
-          .insert(sellerProfile);
-
-        if (sellerError) throw sellerError;
-      }
-    }
-
+    if (error) throw error;
     return authData;
   },
 
-  async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+  /**
+   * Sign in an existing user
+   */
+  signIn: async (data: SignInData) => {
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
+    });
+
+    if (error) throw error;
+    return authData;
+  },
+
+  /**
+   * Sign in with OAuth provider
+   */
+  signInWithOAuth: async (provider: "google" | "facebook" | "github") => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
 
     if (error) throw error;
     return data;
   },
 
-  async signOut() {
+  /**
+   * Sign out the current user
+   */
+  signOut: async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   },
 
-  async getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) return null;
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*, seller:seller_profiles(*)")
-      .eq("id", user.id)
-      .single();
-
-    return { ...user, profile };
+  /**
+   * Get the current user
+   */
+  getCurrentUser: async () => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) throw error;
+    return user;
   },
 
-  async updateProfile(userId: string, updates: any) {
-    const { error } = await supabase
-      .from("profiles")
-      .update(updates)
-      .eq("id", userId);
-
+  /**
+   * Send password reset email
+   */
+  resetPassword: async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
     if (error) throw error;
   },
 
-  async updateSellerProfile(userId: string, updates: any) {
-    const { error } = await supabase
-      .from("seller_profiles")
-      .update(updates)
-      .eq("user_id", userId);
-
+  /**
+   * Update password (for logged-in users)
+   */
+  updatePassword: async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
     if (error) throw error;
   },
 };
