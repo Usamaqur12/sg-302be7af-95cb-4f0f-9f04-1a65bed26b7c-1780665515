@@ -3,9 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Heart, ShoppingCart, Star } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/hooks/useWishlist";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductCardProps {
   id: string;
@@ -16,7 +19,6 @@ interface ProductCardProps {
   rating: number;
   reviewCount: number;
   sellerName: string;
-  isDeal?: boolean;
 }
 
 export function ProductCard({
@@ -28,14 +30,33 @@ export function ProductCard({
   rating,
   reviewCount,
   sellerName,
-  isDeal,
 }: ProductCardProps) {
+  const { addToCart } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
+  const { toast } = useToast();
+
   const discount = compareAtPrice
     ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100)
     : 0;
 
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await addToCart(id, 1);
+    toast({
+      title: "Added to Cart",
+      description: `${title} has been added to your cart`,
+    });
+  };
+
+  const handleWishlistToggle = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await toggleWishlist(id, title, price);
+  };
+
+  const inWishlist = isInWishlist(id);
+
   return (
-    <Card className="group overflow-hidden hover:shadow-lg transition-shadow duration-300">
+    <Card className="group overflow-hidden hover:shadow-lg transition-shadow">
       <Link href={`/products/${id}`}>
         <div className="relative aspect-square overflow-hidden bg-muted">
           <Image
@@ -44,70 +65,53 @@ export function ProductCard({
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          {isDeal && (
-            <Badge className="absolute top-3 left-3 bg-warning text-warning-foreground">
-              Deal
-            </Badge>
-          )}
           {discount > 0 && (
             <Badge className="absolute top-3 right-3 bg-destructive text-destructive-foreground">
               -{discount}%
             </Badge>
           )}
-          <Button
-            size="icon"
-            variant="secondary"
-            className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
+          <button
+            onClick={handleWishlistToggle}
+            className="absolute top-3 left-3 p-2 bg-white/90 hover:bg-white rounded-full transition-colors z-10"
           >
-            <Heart className="h-4 w-4" />
-          </Button>
+            <Heart
+              className={`h-5 w-5 transition-colors ${
+                inWishlist ? "fill-destructive text-destructive" : "text-muted-foreground"
+              }`}
+            />
+          </button>
         </div>
       </Link>
 
       <CardContent className="p-4">
         <Link href={`/products/${id}`}>
-          <h3 className="font-medium line-clamp-2 mb-2 group-hover:text-accent transition-colors">
+          <p className="text-sm text-muted-foreground mb-1">{sellerName}</p>
+          <h3 className="font-medium mb-2 line-clamp-2 hover:text-accent transition-colors">
             {title}
           </h3>
+
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-1">
+              <Star className="h-4 w-4 fill-warning text-warning" />
+              <span className="text-sm font-medium font-mono">{rating.toFixed(1)}</span>
+            </div>
+            <span className="text-sm text-muted-foreground">({reviewCount})</span>
+          </div>
+
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-xl font-bold font-mono">${price.toFixed(2)}</span>
+            {compareAtPrice && (
+              <span className="text-sm text-muted-foreground line-through font-mono">
+                ${compareAtPrice.toFixed(2)}
+              </span>
+            )}
+          </div>
         </Link>
 
-        <div className="flex items-center gap-1 mb-2 text-sm">
-          <div className="flex items-center">
-            <Star className="h-3 w-3 fill-warning text-warning" />
-            <span className="ml-1 font-medium font-mono">{rating.toFixed(1)}</span>
-          </div>
-          <span className="text-muted-foreground">({reviewCount})</span>
-        </div>
-
-        <p className="text-xs text-muted-foreground mb-3">{sellerName}</p>
-
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-bold font-mono">${price.toFixed(2)}</span>
-              {compareAtPrice && (
-                <span className="text-sm text-muted-foreground line-through font-mono">
-                  ${compareAtPrice.toFixed(2)}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <Button
-            size="icon"
-            className="bg-accent hover:bg-accent/90"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <ShoppingCart className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button onClick={handleAddToCart} className="w-full" size="sm">
+          <ShoppingCart className="mr-2 h-4 w-4" />
+          Add to Cart
+        </Button>
       </CardContent>
     </Card>
   );
