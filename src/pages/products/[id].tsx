@@ -1,4 +1,5 @@
 import { CustomerLayout } from "@/components/CustomerLayout";
+import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
