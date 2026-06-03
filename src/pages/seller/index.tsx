@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { Package, ShoppingCart, DollarSign, TrendingUp } from "lucide-react";
+import Link from "next/link";
 
 interface Stats {
   totalProducts: number;
@@ -165,20 +166,20 @@ export default function SellerDashboard() {
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
             <div className="space-y-3">
-              <a
+              <Link
                 href="/seller/products/new"
                 className="block p-4 border border-border rounded-lg hover:border-accent transition-colors"
               >
                 <p className="font-medium">Add New Product</p>
                 <p className="text-sm text-muted-foreground">Create a new product listing</p>
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/seller/orders"
                 className="block p-4 border border-border rounded-lg hover:border-accent transition-colors"
               >
                 <p className="font-medium">Manage Orders</p>
                 <p className="text-sm text-muted-foreground">Process and fulfill orders</p>
-              </a>
+              </Link>
             </div>
           </Card>
         </div>
