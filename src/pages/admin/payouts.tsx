@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/database.types";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { CheckCircle, XCircle } from "lucide-react";
@@ -55,12 +56,16 @@ export default function AdminPayouts() {
   };
 
   const updateWithdrawalStatus = async (withdrawalId: string, status: string) => {
+    type WithdrawalUpdate = Database["public"]["Tables"]["withdrawal_requests"]["Update"];
+    
+    const updateData: WithdrawalUpdate = {
+      status: status as any,
+      processed_at: new Date().toISOString(),
+    };
+
     const { error } = await supabase
       .from("withdrawal_requests")
-      .update({
-        status: status as any,
-        processed_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", withdrawalId);
 
     if (error) {

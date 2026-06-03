@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/database.types";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { Search, CheckCircle, XCircle } from "lucide-react";
@@ -62,9 +63,15 @@ export default function AdminSellers() {
   };
 
   const updateVerificationStatus = async (sellerId: string, status: string) => {
+    type SellerUpdate = Database["public"]["Tables"]["seller_profiles"]["Update"];
+    
+    const updateData: SellerUpdate = {
+      verification_status: status as any,
+    };
+
     const { error } = await supabase
       .from("seller_profiles")
-      .update({ verification_status: status as any })
+      .update(updateData)
       .eq("id", sellerId);
 
     if (error) {
