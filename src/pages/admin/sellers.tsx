@@ -16,7 +16,7 @@ interface Seller {
   business_name: string;
   email: string | null;
   phone: string | null;
-  verification_status: string;
+  status: string;
   created_at: string;
   rating: number;
   total_reviews: number;
@@ -50,7 +50,7 @@ export default function AdminSellers() {
         business_name,
         email,
         phone,
-        verification_status,
+        status,
         created_at,
         rating,
         total_reviews,
@@ -62,11 +62,11 @@ export default function AdminSellers() {
     setLoading(false);
   };
 
-  const updateVerificationStatus = async (sellerId: string, status: string) => {
+  const updateSellerStatus = async (sellerId: string, status: string) => {
     type SellerUpdate = Database["public"]["Tables"]["seller_profiles"]["Update"];
     
     const updateData: SellerUpdate = {
-      verification_status: status as any,
+      status: status as any,
     };
 
     const { error } = await supabase
@@ -77,7 +77,7 @@ export default function AdminSellers() {
     if (error) {
       toast({
         title: "Error",
-        description: "Failed to update verification status",
+        description: "Failed to update seller status",
         variant: "destructive",
       });
       return;
@@ -132,14 +132,14 @@ export default function AdminSellers() {
                     <h3 className="font-semibold text-lg">{seller.business_name}</h3>
                     <Badge
                       className={
-                        seller.verification_status === "approved"
+                        seller.status === "approved"
                           ? "bg-green-500"
-                          : seller.verification_status === "pending"
+                          : seller.status === "pending"
                           ? "bg-warning"
                           : "bg-destructive"
                       }
                     >
-                      {seller.verification_status}
+                      {seller.status}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground mb-1">
@@ -158,11 +158,11 @@ export default function AdminSellers() {
                   </p>
                 </div>
 
-                {seller.verification_status === "pending" && (
+                {seller.status === "pending" && (
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      onClick={() => updateVerificationStatus(seller.id, "approved")}
+                      onClick={() => updateSellerStatus(seller.id, "approved")}
                       className="bg-green-500 hover:bg-green-600"
                     >
                       <CheckCircle className="h-4 w-4 mr-2" />
@@ -171,7 +171,7 @@ export default function AdminSellers() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => updateVerificationStatus(seller.id, "rejected")}
+                      onClick={() => updateSellerStatus(seller.id, "rejected")}
                     >
                       <XCircle className="h-4 w-4 mr-2" />
                       Reject

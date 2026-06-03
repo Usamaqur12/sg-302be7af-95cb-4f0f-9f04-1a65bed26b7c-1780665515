@@ -15,7 +15,8 @@ interface WithdrawalRequest {
   amount: number;
   status: string;
   created_at: string;
-  processed_at: string | null;
+  completed_at: string | null;
+  rejected_at: string | null;
   seller: {
     business_name: string;
     email: string | null;
@@ -46,7 +47,8 @@ export default function AdminPayouts() {
         amount,
         status,
         created_at,
-        processed_at,
+        completed_at,
+        rejected_at,
         seller:seller_profiles(business_name, email)
       `)
       .order("created_at", { ascending: false });
@@ -60,8 +62,13 @@ export default function AdminPayouts() {
     
     const updateData: WithdrawalUpdate = {
       status: status as any,
-      processed_at: new Date().toISOString(),
     };
+
+    if (status === "completed") {
+      updateData.completed_at = new Date().toISOString();
+    } else if (status === "rejected") {
+      updateData.rejected_at = new Date().toISOString();
+    }
 
     const { error } = await supabase
       .from("withdrawal_requests")
@@ -128,9 +135,14 @@ export default function AdminPayouts() {
                   <p className="text-sm text-muted-foreground">
                     Requested: {new Date(withdrawal.created_at).toLocaleDateString()}
                   </p>
-                  {withdrawal.processed_at && (
+                  {withdrawal.completed_at && (
                     <p className="text-sm text-muted-foreground">
-                      Processed: {new Date(withdrawal.processed_at).toLocaleDateString()}
+                      Completed: {new Date(withdrawal.completed_at).toLocaleDateString()}
+                    </p>
+                  )}
+                  {withdrawal.rejected_at && (
+                    <p className="text-sm text-muted-foreground">
+                      Rejected: {new Date(withdrawal.rejected_at).toLocaleDateString()}
                     </p>
                   )}
                 </div>
