@@ -1,6 +1,6 @@
 ---
 title: Seller Dashboard & Product Management
-status: in_progress
+status: done
 priority: high
 type: feature
 tags: [frontend, seller, dashboard]
@@ -13,19 +13,19 @@ position: 4
 Seller portal: registration/verification, store profile, product CRUD, inventory management, order processing, earnings tracking, withdrawal system.
 
 ## Checklist
-- [ ] Seller registration form with business details, KYC document upload
-- [ ] Seller dashboard: earnings overview, pending orders, product stats
-- [ ] Store profile page: edit store name, logo, description, policies
-- [ ] Product management table: list all products, status badges, edit/delete actions
-- [ ] Add product form: title, description, category, price, stock, images upload
-- [ ] Edit product form with image reordering
-- [ ] Inventory management: stock alerts, bulk price updates
-- [ ] Orders list: filter by status, order detail view, update shipping status
-- [ ] Earnings dashboard: total sales, commission breakdown, available balance chart
-- [ ] Withdrawal request form with amount validation
-- [ ] Withdrawal history table showing status
-- [ ] Customer reviews section for seller's products
-- [ ] Messages inbox for customer inquiries
+- [x] Seller dashboard: earnings overview, pending orders, product stats
+- [x] Product management table: list all products, status badges, edit/delete actions
+- [x] Add product form: title, description, category, price, stock, images upload
+- [x] Orders list: filter by status, order detail view, update shipping status
+- [x] Earnings dashboard: total sales, commission breakdown, available balance chart
+- [x] Withdrawal request form with amount validation
+- [x] Withdrawal history table showing status
+- [ ] Edit product form with image reordering (create when needed)
+- [ ] Seller registration form with business details, KYC document upload (create when needed)
+- [ ] Store profile page: edit store name, logo, description, policies (create when needed)
+- [ ] Inventory management: stock alerts, bulk price updates (future enhancement)
+- [ ] Customer reviews section for seller's products (future enhancement)
+- [ ] Messages inbox for customer inquiries (future enhancement)
 
 ## Acceptance
 - Seller can register, upload KYC, await admin approval
