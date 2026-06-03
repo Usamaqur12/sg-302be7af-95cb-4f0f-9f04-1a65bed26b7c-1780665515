@@ -3,6 +3,9 @@
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { CategoryCard } from "@/components/CategoryCard";
+import { TrendingStrip } from "@/components/TrendingStrip";
+import { CategoryIconRow } from "@/components/CategoryIconRow";
+import { ShockingDealsSection } from "@/components/ShockingDealsSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -16,7 +19,11 @@ import {
   Star,
   Users,
   DollarSign,
-  Zap
+  Zap,
+  ShoppingBag,
+  Shield,
+  Headphones,
+  Search
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -296,6 +303,15 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* NEW: Trending Products Strip */}
+      <TrendingStrip />
+
+      {/* NEW: Category Icon Row */}
+      <CategoryIconRow />
+
+      {/* NEW: Shocking Deals Section */}
+      <ShockingDealsSection />
 
       {/* Featured Categories */}
       <section className="py-16 bg-background">
