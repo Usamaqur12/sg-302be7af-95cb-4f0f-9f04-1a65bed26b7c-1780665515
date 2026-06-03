@@ -488,6 +488,7 @@ export type Database = {
           rating: number | null
           rejection_reason: string | null
           sales_count: number | null
+          search_vector: unknown
           seller_id: string
           sku: string | null
           slug: string
@@ -516,6 +517,7 @@ export type Database = {
           rating?: number | null
           rejection_reason?: string | null
           sales_count?: number | null
+          search_vector?: unknown
           seller_id: string
           sku?: string | null
           slug: string
@@ -544,6 +546,7 @@ export type Database = {
           rating?: number | null
           rejection_reason?: string | null
           sales_count?: number | null
+          search_vector?: unknown
           seller_id?: string
           sku?: string | null
           slug?: string
@@ -1049,7 +1052,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_products: {
+        Args: { search_query: string }
+        Returns: {
+          description: string
+          id: string
+          price: number
+          rank: number
+          rating: number
+          title: string
+          total_reviews: number
+        }[]
+      }
     }
     Enums: {
       order_status:
