@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/database.types";
 
 type UserRole = "customer" | "seller" | "admin";
+type SellerProfileInsert = Database["public"]["Tables"]["seller_profiles"]["Insert"];
 
 export const authService = {
   async signUp(email: string, password: string, role: UserRole = "customer") {
@@ -14,19 +16,21 @@ export const authService = {
     if (authData.user) {
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ role: role as any })
+        .update({ role })
         .eq("id", authData.user.id);
 
       if (profileError) throw profileError;
 
       if (role === "seller") {
+        const sellerProfile: SellerProfileInsert = {
+          user_id: authData.user.id,
+          business_name: "New Seller",
+          verification_status: "pending",
+        };
+
         const { error: sellerError } = await supabase
           .from("seller_profiles")
-          .insert({
-            user_id: authData.user.id,
-            business_name: "New Seller",
-            verification_status: "pending" as any,
-          });
+          .insert(sellerProfile);
 
         if (sellerError) throw sellerError;
       }
