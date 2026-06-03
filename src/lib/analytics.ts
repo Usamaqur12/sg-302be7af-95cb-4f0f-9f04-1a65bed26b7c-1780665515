@@ -158,6 +158,20 @@ export const analytics = {
   },
 
   /**
+   * Track purchase completed
+   */
+  purchaseCompleted: (orderId: string, total: number, items: Array<{ id: string; name: string; price: number; quantity: number }>) => {
+    if (typeof window !== "undefined" && posthog) {
+      posthog.capture("purchase_completed", {
+        order_id: orderId,
+        total,
+        items,
+        revenue: total,
+      });
+    }
+  },
+
+  /**
    * Track search performed
    */
   searchPerformed: (query: string, resultCount: number) => {

@@ -22,7 +22,7 @@ type CheckoutStep = "shipping" | "payment" | "confirmation";
 
 export default function CheckoutPage() {
   const { user } = useAuth();
-  const { items, getTotalPrice, getTotalItems, clearCart } = useCart();
+  const { items, total: cartTotal, itemCount, clearCart } = useCart();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -51,7 +51,7 @@ export default function CheckoutPage() {
     cvv: "",
   });
 
-  const subtotal = getTotalPrice();
+  const subtotal = cartTotal;
   const shipping = subtotal > 50 ? 0 : 9.99;
   const tax = subtotal * 0.08; // 8% tax
   const total = subtotal + shipping + tax;
@@ -159,18 +159,16 @@ export default function CheckoutPage() {
       setOrderId(newOrderId);
 
       // Track purchase
-      analytics.purchaseCompleted({
-        orderId: newOrderId,
+      analytics.purchaseCompleted(
+        newOrderId,
         total,
-        tax,
-        shipping,
-        items: items.map((item) => ({
-          id: item.id,
-          name: item.title,
-          price: item.price,
+        items.map((item) => ({
+          id: item.product.id,
+          name: item.product.title,
+          price: item.product.price,
           quantity: item.quantity,
-        })),
-      });
+        }))
+      );
 
       // Clear cart
       clearCart();
@@ -554,17 +552,17 @@ export default function CheckoutPage() {
                       <div key={item.id} className="flex gap-3">
                         <div className="relative w-16 h-16 rounded overflow-hidden bg-muted flex-shrink-0">
                           <Image
-                            src={item.image || "/placeholder.png"}
-                            alt={item.title}
+                            src={item.product.images?.[0]?.url || "/placeholder.png"}
+                            alt={item.product.title}
                             fill
                             className="object-cover"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{item.title}</p>
+                          <p className="font-medium text-sm truncate">{item.product.title}</p>
                           <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
                           <p className="text-sm font-semibold font-mono">
-                            ${(item.price * item.quantity).toFixed(2)}
+                            ${(item.product.price * item.quantity).toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -577,7 +575,7 @@ export default function CheckoutPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
-                        Subtotal ({getTotalItems()} items)
+                        Subtotal ({itemCount} items)
                       </span>
                       <span className="font-mono">${subtotal.toFixed(2)}</span>
                     </div>
