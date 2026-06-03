@@ -25,7 +25,6 @@ export const authService = {
         const sellerProfile: SellerProfileInsert = {
           user_id: authData.user.id,
           business_name: "New Seller",
-          verification_status: "pending",
         };
 
         const { error: sellerError } = await supabase
