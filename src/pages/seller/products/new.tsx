@@ -65,6 +65,14 @@ export default function AddProduct() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const generateSlug = (title: string) => {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .substring(0, 100);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -87,11 +95,14 @@ export default function AddProduct() {
         return;
       }
 
+      const slug = generateSlug(formData.title);
+
       const { data: product, error: productError } = await supabase
         .from("products")
         .insert({
           seller_id: sellerProfile.id,
           title: formData.title,
+          slug,
           description: formData.description,
           category_id: formData.category_id,
           price: parseFloat(formData.price),

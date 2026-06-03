@@ -93,7 +93,7 @@ export default function SellerOrders() {
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     const { error } = await supabase
       .from("orders")
-      .update({ status: newStatus })
+      .update({ status: newStatus as any })
       .eq("id", orderId);
 
     if (error) {
