@@ -33,16 +33,7 @@ export default function RegisterPage() {
     if (password !== confirmPassword) {
       toast({
         title: "Passwords don't match",
-        description: "Please make sure your passwords match",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!agreedToTerms) {
-      toast({
-        title: "Terms Required",
-        description: "Please agree to the terms and conditions",
+        description: "Please make sure both passwords are the same.",
         variant: "destructive",
       });
       return;
@@ -51,18 +42,18 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await signUp(email, password, fullName, "customer");
-
+      await signUp(email, password, fullName);
+      
       toast({
-        title: "Account Created!",
-        description: "Please check your email to verify your account.",
+        title: "Account created!",
+        description: "Welcome to the marketplace.",
       });
 
-      router.push("/login");
+      router.push("/account/dashboard");
     } catch (error: any) {
       toast({
         title: "Registration Failed",
-        description: error.message || "Failed to create account",
+        description: error.message || "Could not create account",
         variant: "destructive",
       });
     } finally {

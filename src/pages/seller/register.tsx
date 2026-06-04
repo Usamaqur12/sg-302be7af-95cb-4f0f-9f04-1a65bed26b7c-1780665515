@@ -22,22 +22,32 @@ export default function SellerRegisterPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [formData, setFormData] = useState({
+    // Personal Information
     fullName: "",
     email: "",
     phone: "",
     password: "",
     confirmPassword: "",
+
+    // Business Information  
     shopName: "",
     shopDescription: "",
-    businessType: "",
+    businessType: "individual" as const,
+
+    // Address
     address: "",
     city: "",
     state: "",
     zipCode: "",
-    country: "",
+    country: "United States",
+
+    // Bank Details
     bankAccountNumber: "",
     bankName: "",
     bankRoutingNumber: "",
+
+    // Terms
+    agreeToTerms: false,
   });
 
   const handleChange = (field: string, value: string) => {

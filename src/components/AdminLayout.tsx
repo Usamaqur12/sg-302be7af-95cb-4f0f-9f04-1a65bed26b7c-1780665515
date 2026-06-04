@@ -18,7 +18,9 @@ import {
   LogOut,
   Menu,
   X,
-  Shield
+  Shield,
+  Grid3x3,
+  MessageSquare
 } from "lucide-react";
 import { useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
