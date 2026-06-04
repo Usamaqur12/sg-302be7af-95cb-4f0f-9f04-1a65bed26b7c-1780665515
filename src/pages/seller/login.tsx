@@ -42,7 +42,7 @@ export default function SellerLoginPage() {
         .eq("id", user.id)
         .single();
 
-      if (profileError || profile?.role !== "vendor") {
+      if (profileError || profile?.role !== "seller") {
         toast({
           title: "Access Denied",
           description: "This account is not registered as a seller",
