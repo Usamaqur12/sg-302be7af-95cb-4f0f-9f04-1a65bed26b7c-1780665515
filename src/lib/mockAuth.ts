@@ -9,6 +9,7 @@ export interface MockUser {
   role: "customer" | "vendor" | "admin";
   status: "active" | "pending" | "suspended";
   phone?: string;
+  created_at?: string;
 }
 
 // Hardcoded demo accounts
@@ -20,6 +21,7 @@ export const DEMO_USERS: MockUser[] = [
     full_name: "Admin User",
     role: "admin",
     status: "active",
+    created_at: "2026-01-01T00:00:00Z",
   },
   {
     id: "seller-001",
@@ -29,6 +31,7 @@ export const DEMO_USERS: MockUser[] = [
     role: "vendor",
     status: "active",
     phone: "+1-555-0001",
+    created_at: "2026-02-15T00:00:00Z",
   },
   {
     id: "pending-001",
@@ -38,6 +41,7 @@ export const DEMO_USERS: MockUser[] = [
     role: "vendor",
     status: "pending",
     phone: "+1-555-0002",
+    created_at: "2026-05-20T00:00:00Z",
   },
   {
     id: "customer-001",
@@ -47,6 +51,7 @@ export const DEMO_USERS: MockUser[] = [
     role: "customer",
     status: "active",
     phone: "+1-555-0003",
+    created_at: "2026-03-10T00:00:00Z",
   },
 ];
 
@@ -104,6 +109,7 @@ export const mockAuth = {
       full_name: fullName,
       role: "customer",
       status: "active",
+      created_at: new Date().toISOString(),
     };
 
     // In a real app, this would be saved to database

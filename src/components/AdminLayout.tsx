@@ -1,30 +1,44 @@
 "use client";
 
+import { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
-import { authService } from "@/services/authService";
-import {
-  LayoutDashboard,
-  Users,
-  Store,
-  Package,
-  ShoppingCart,
-  DollarSign,
+import { 
+  LayoutDashboard, 
+  Users, 
+  Store, 
+  Package, 
+  ShoppingCart, 
+  Tag, 
+  CreditCard, 
+  DollarSign, 
+  BarChart3, 
   Settings,
   LogOut,
-  Shield,
-  Grid3x3,
-  MessageSquare,
+  Menu,
+  X
 } from "lucide-react";
+import { useState } from "react";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
-export function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+interface AdminLayoutProps {
+  children: ReactNode;
+}
+
+export function AdminLayout({ children }: AdminLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
+  const { signOut, user } = useAuthContext();
+  const { toast } = useToast();
 
-  const handleSignOut = async () => {
-    await authService.signOut();
+  const handleLogout = async () => {
+    await signOut();
+    toast({
+      title: "Logged out",
+      description: "You have been successfully logged out.",
+    });
     router.push("/admin/login");
   };
 
@@ -53,7 +67,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">{user?.email}</span>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-2" />
               Sign Out
             </Button>
