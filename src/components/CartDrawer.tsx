@@ -15,9 +15,9 @@ interface CartDrawerProps {
 }
 
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
-  const { items, updateQuantity, removeFromCart, getCartTotal } = useCart();
+  const { items, updateQuantity, removeFromCart, total: cartTotal } = useCart();
 
-  const subtotal = getCartTotal();
+  const subtotal = cartTotal;
   const shipping = subtotal > 50 ? 0 : 5.99;
   const total = subtotal + shipping;
 
