@@ -87,14 +87,14 @@ export default function SellerRegisterPage() {
     setLoading(true);
 
     try {
-      // 1. Create auth user with vendor role
+      // 1. Create auth user with seller role
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           data: {
             full_name: formData.fullName,
-            role: "vendor",
+            role: "seller",
           },
         },
       });
@@ -105,9 +105,19 @@ export default function SellerRegisterPage() {
         throw new Error("User creation failed");
       }
 
-      // 2. Create seller profile with pending status
-      // Note: verification_status column will be available after Phase 2 migration
-      const { error: profileError } = await supabase.from("seller_profiles").insert({
+      // 2. Create user profile with seller role
+      const { error: userProfileError } = await supabase.from("profiles").insert({
+        id: authData.user.id,
+        email: formData.email,
+        full_name: formData.fullName,
+        phone: formData.phone || null,
+        role: "seller",
+      });
+
+      if (userProfileError) throw userProfileError;
+
+      // 3. Create seller profile with pending status
+      const { error: sellerProfileError } = await supabase.from("seller_profiles").insert({
         user_id: authData.user.id,
         business_name: formData.shopName,
         business_description: formData.shopDescription,
@@ -117,9 +127,10 @@ export default function SellerRegisterPage() {
         bank_account_number: formData.bankAccountNumber,
         bank_name: formData.bankName,
         bank_routing_number: formData.bankRoutingNumber,
+        status: "pending", // Set initial status as pending
       });
 
-      if (profileError) throw profileError;
+      if (sellerProfileError) throw sellerProfileError;
 
       // Note: Admin notifications will be enabled after Phase 2 migration adds notifications table
 

@@ -56,7 +56,7 @@ export default function SellerLoginPage() {
       // Get seller profile to check verification status
       const { data: sellerProfile, error: sellerError } = await supabase
         .from("seller_profiles")
-        .select("verification_status")
+        .select("status")
         .eq("user_id", user.id)
         .single();
 
@@ -71,7 +71,7 @@ export default function SellerLoginPage() {
 
       // Check seller status and redirect accordingly
       setTimeout(() => {
-        const status = sellerProfile?.verification_status;
+        const status = sellerProfile?.status;
         
         if (status === "pending" || !status) {
           router.push("/seller/pending-approval");
