@@ -28,8 +28,8 @@ export default function AdminLoginPage() {
     try {
       const response = await signIn(email, password);
 
-      if (!response.success || !response.user) {
-        throw new Error(response.message || "Login failed");
+      if (!response?.success || !response?.user) {
+        throw new Error(response?.message || "Login failed");
       }
 
       const user = response.user;
@@ -41,6 +41,7 @@ export default function AdminLoginPage() {
           description: "This account does not have admin privileges",
           variant: "destructive",
         });
+        setLoading(false);
         return;
       }
 
@@ -49,14 +50,17 @@ export default function AdminLoginPage() {
         description: "Welcome to the admin dashboard.",
       });
 
-      router.push("/admin");
+      // Use setTimeout to ensure state updates complete before navigation
+      setTimeout(() => {
+        router.push("/admin");
+      }, 100);
     } catch (error: any) {
+      console.error("Admin login error:", error);
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid credentials",
+        description: error?.message || "Invalid credentials",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };

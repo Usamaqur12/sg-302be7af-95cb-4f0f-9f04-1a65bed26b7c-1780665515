@@ -28,8 +28,8 @@ export default function SellerLoginPage() {
     try {
       const response = await signIn(email, password);
 
-      if (!response.success || !response.user) {
-        throw new Error(response.message || "Login failed");
+      if (!response?.success || !response?.user) {
+        throw new Error(response?.message || "Login failed");
       }
 
       const user = response.user;
@@ -41,6 +41,7 @@ export default function SellerLoginPage() {
           description: "This account is not registered as a seller",
           variant: "destructive",
         });
+        setLoading(false);
         return;
       }
 
@@ -49,25 +50,28 @@ export default function SellerLoginPage() {
         description: "You have successfully logged in.",
       });
 
-      // Check seller status
-      if (user.status === "pending") {
-        router.push("/seller/pending-approval");
-      } else if (user.status === "suspended") {
-        toast({
-          title: "Account Suspended",
-          description: "Your seller account has been suspended. Contact support for assistance.",
-          variant: "destructive",
-        });
-      } else {
-        router.push("/seller");
-      }
+      // Check seller status and redirect accordingly
+      setTimeout(() => {
+        if (user.status === "pending") {
+          router.push("/seller/pending-approval");
+        } else if (user.status === "suspended") {
+          toast({
+            title: "Account Suspended",
+            description: "Your seller account has been suspended. Contact support for assistance.",
+            variant: "destructive",
+          });
+          setLoading(false);
+        } else {
+          router.push("/seller");
+        }
+      }, 100);
     } catch (error: any) {
+      console.error("Seller login error:", error);
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid email or password",
+        description: error?.message || "Invalid email or password",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };

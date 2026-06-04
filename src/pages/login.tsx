@@ -29,8 +29,8 @@ export default function LoginPage() {
     try {
       const response = await signIn(email, password);
 
-      if (!response.success || !response.user) {
-        throw new Error(response.message || "Login failed");
+      if (!response?.success || !response?.user) {
+        throw new Error(response?.message || "Login failed");
       }
 
       const user = response.user;
@@ -40,26 +40,27 @@ export default function LoginPage() {
         description: "You have successfully logged in.",
       });
 
-      // Redirect based on role
-      if (user.role === "admin") {
-        router.push("/admin");
-      } else if (user.role === "vendor") {
-        // Check status for vendor
-        if (user.status === "pending") {
-          router.push("/seller/pending-approval");
+      // Redirect based on role with timeout to ensure state updates
+      setTimeout(() => {
+        if (user.role === "admin") {
+          router.push("/admin");
+        } else if (user.role === "vendor") {
+          if (user.status === "pending") {
+            router.push("/seller/pending-approval");
+          } else {
+            router.push("/seller");
+          }
         } else {
-          router.push("/seller");
+          router.push("/account/dashboard");
         }
-      } else {
-        router.push("/account/dashboard");
-      }
+      }, 100);
     } catch (error: any) {
+      console.error("Login error:", error);
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid email or password",
+        description: error?.message || "Invalid email or password",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
