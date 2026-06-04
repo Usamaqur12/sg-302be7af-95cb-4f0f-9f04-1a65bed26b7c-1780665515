@@ -18,74 +18,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { 
   Star, Heart, ShoppingCart, TruckIcon, Package, 
-  ShieldCheck, RefreshCcw, Share2, Minus, Plus, Store, ChevronLeft
+  ShieldCheck, RefreshCcw, Share2, Minus, Plus, Store, ChevronLeft, Loader2
 } from "lucide-react";
-
-// Mock product data
-const MOCK_PRODUCTS: Record<string, any> = {
-  "1": {
-    id: "1",
-    title: "Premium Wireless Headphones",
-    slug: "premium-wireless-headphones",
-    description: "Experience studio-quality sound with our premium wireless headphones. Featuring active noise cancellation, 30-hour battery life, and premium leather cushions for all-day comfort.",
-    price: 299.99,
-    salePrice: 249.99,
-    images: [
-      { url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800" },
-      { url: "https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800" },
-      { url: "https://images.unsplash.com/photo-1524678606370-a47ad25cb82a?w=800" },
-    ],
-    rating: 4.8,
-    totalReviews: 248,
-    stock: 42,
-    category: { name: "Electronics", slug: "electronics" },
-    seller: {
-      id: "seller-1",
-      business_name: "AudioTech Store",
-      rating: 4.9,
-      total_products: 156,
-    },
-    specifications: {
-      "Brand": "AudioTech",
-      "Model": "AT-PRO500",
-      "Battery Life": "30 hours",
-      "Noise Cancellation": "Active ANC",
-      "Connectivity": "Bluetooth 5.2, 3.5mm AUX",
-      "Weight": "250g",
-      "Warranty": "2 Years",
-    },
-  },
-  "2": {
-    id: "2",
-    title: "Smart Watch Series X",
-    slug: "smart-watch-series-x",
-    description: "Stay connected and healthy with our latest smartwatch. Track your fitness, monitor your heart rate, receive notifications, and enjoy a stunning AMOLED display with customizable watch faces.",
-    price: 399.99,
-    salePrice: 349.99,
-    images: [
-      { url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800" },
-      { url: "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=800" },
-    ],
-    rating: 4.6,
-    totalReviews: 182,
-    stock: 28,
-    category: { name: "Wearables", slug: "wearables" },
-    seller: {
-      id: "seller-2",
-      business_name: "TechGear Plus",
-      rating: 4.7,
-      total_products: 89,
-    },
-    specifications: {
-      "Display": "1.4\" AMOLED",
-      "Battery": "Up to 7 days",
-      "Water Resistance": "5ATM (50m)",
-      "Sensors": "Heart rate, GPS, Accelerometer",
-      "Compatibility": "iOS & Android",
-      "Warranty": "1 Year",
-    },
-  },
-};
+import { supabase } from "@/integrations/supabase/client";
 
 export default function ProductDetailPage() {
   const router = useRouter();
@@ -95,44 +30,84 @@ export default function ProductDetailPage() {
   const { toast } = useToast();
 
   const [product, setProduct] = useState<any>(null);
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
 
   useEffect(() => {
     if (!id) return;
-
-    // Simulate API call with instant mock data
-    const loadProduct = () => {
-      setLoading(true);
-      
-      // Use mock data
-      const mockProduct = MOCK_PRODUCTS[id as string] || MOCK_PRODUCTS["1"];
-      
-      setTimeout(() => {
-        setProduct(mockProduct);
-        setLoading(false);
-      }, 100);
-    };
-
-    loadProduct();
+    fetchProduct();
   }, [id]);
 
-  const handleAddToCart = () => {
+  const fetchProduct = async () => {
+    if (!id) return;
+    
+    setLoading(true);
+    setNotFound(false);
+
+    try {
+      // Fetch product by ID
+      const { data: productData, error: productError } = await supabase
+        .from("products")
+        .select(`
+          *,
+          images:product_images(id, url, display_order),
+          category:categories(id, name, slug),
+          seller:seller_profiles!seller_id(id, business_name, logo_url)
+        `)
+        .eq("id", id as string)
+        .eq("status", "approved")
+        .single();
+
+      if (productError || !productData) {
+        console.error("Product not found:", productError);
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      // Sort images by display_order
+      if (productData.images) {
+        productData.images.sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+      }
+
+      setProduct(productData);
+
+      // Fetch related products from same category
+      if (productData.category_id) {
+        const { data: relatedData } = await supabase
+          .from("products")
+          .select(`
+            id,
+            title,
+            price,
+            compare_at_price,
+            rating,
+            total_reviews,
+            images:product_images(url),
+            seller:seller_profiles!seller_id(id, business_name)
+          `)
+          .eq("category_id", productData.category_id)
+          .eq("status", "approved")
+          .neq("id", id as string)
+          .limit(4);
+
+        setRelatedProducts(relatedData || []);
+      }
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      setNotFound(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddToCart = async () => {
     if (!product) return;
 
-    addToCart({
-      id: `cart-${product.id}`,
-      product_id: product.id,
-      quantity,
-      product: {
-        id: product.id,
-        title: product.title,
-        price: product.salePrice || product.price,
-        images: product.images,
-        slug: product.slug,
-      },
-    });
+    await addToCart(product.id, quantity);
 
     toast({
       title: "Added to Cart",
@@ -142,11 +117,11 @@ export default function ProductDetailPage() {
 
   const handleToggleWishlist = () => {
     if (!product) return;
-    toggleWishlist(product.id, product.title);
+    toggleWishlist(product.id);
   };
 
   const incrementQuantity = () => {
-    if (quantity < (product?.stock || 99)) {
+    if (quantity < (product?.stock_quantity || 99)) {
       setQuantity(quantity + 1);
     }
   };
@@ -160,43 +135,42 @@ export default function ProductDetailPage() {
   if (loading) {
     return (
       <CustomerLayout>
-        <div className="container py-16">
-          <div className="animate-pulse space-y-8">
-            <div className="h-8 w-48 bg-muted rounded"/>
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="aspect-square bg-muted rounded-lg"/>
-              <div className="space-y-4">
-                <div className="h-8 w-3/4 bg-muted rounded"/>
-                <div className="h-6 w-1/2 bg-muted rounded"/>
-                <div className="h-24 bg-muted rounded"/>
-              </div>
-            </div>
+        <div className="container py-16 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Loading product details...</p>
           </div>
         </div>
       </CustomerLayout>
     );
   }
 
-  if (!product) {
+  if (notFound || !product) {
     return (
       <CustomerLayout>
         <div className="container py-16 text-center">
           <Package className="h-16 w-16 mx-auto text-muted-foreground mb-4"/>
           <h2 className="text-2xl font-bold mb-2">Product Not Found</h2>
-          <p className="text-muted-foreground mb-8">The product you're looking for doesn't exist.</p>
-          <Button asChild>
-            <Link href="/">Back to Home</Link>
-          </Button>
+          <p className="text-muted-foreground mb-8">The product you're looking for doesn't exist or is no longer available.</p>
+          <div className="flex gap-4 justify-center">
+            <Button onClick={() => router.back()} variant="outline">
+              Go Back
+            </Button>
+            <Button asChild>
+              <Link href="/products">Browse Products</Link>
+            </Button>
+          </div>
         </div>
       </CustomerLayout>
     );
   }
 
-  const discount = product.salePrice 
-    ? Math.round(((product.price - product.salePrice) / product.price) * 100)
+  const discount = product.compare_at_price && product.compare_at_price > product.price
+    ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100)
     : 0;
 
-  const relatedProducts = Object.values(MOCK_PRODUCTS).filter(p => p.id !== product.id).slice(0, 4);
+  const images = product.images || [];
+  const selectedImageUrl = images[selectedImage]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800";
 
   return (
     <CustomerLayout>
@@ -206,12 +180,16 @@ export default function ProductDetailPage() {
           <Link href="/" className="hover:text-foreground">Home</Link>
           <span>/</span>
           <Link href="/categories" className="hover:text-foreground">Categories</Link>
+          {product.category && (
+            <>
+              <span>/</span>
+              <Link href={`/categories/${product.category.slug}`} className="hover:text-foreground">
+                {product.category.name}
+              </Link>
+            </>
+          )}
           <span>/</span>
-          <Link href={`/categories/${product.category.slug}`} className="hover:text-foreground">
-            {product.category.name}
-          </Link>
-          <span>/</span>
-          <span className="text-foreground">{product.title}</span>
+          <span className="text-foreground truncate">{product.title}</span>
         </div>
 
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => router.back()}>
@@ -225,7 +203,7 @@ export default function ProductDetailPage() {
           <div className="space-y-4">
             <div className="relative aspect-square rounded-xl overflow-hidden bg-muted border">
               <Image
-                src={product.images[selectedImage]?.url || "/placeholder.png"}
+                src={selectedImageUrl}
                 alt={product.title}
                 fill
                 className="object-cover"
@@ -239,9 +217,9 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Thumbnail Gallery */}
-            {product.images.length > 1 && (
+            {images.length > 1 && (
               <div className="grid grid-cols-4 gap-2">
-                {product.images.map((img: any, idx: number) => (
+                {images.map((img: any, idx: number) => (
                   <button
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
@@ -259,17 +237,14 @@ export default function ProductDetailPage() {
           {/* Product Info */}
           <div className="space-y-6">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Link href={`/sellers/${product.seller.id}`} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-                  <Store className="h-3.5 w-3.5" />
-                  {product.seller.business_name}
-                </Link>
-                <span className="text-muted-foreground">•</span>
-                <div className="flex items-center gap-1 text-sm">
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                  <span className="font-medium">{product.seller.rating}</span>
+              {product.seller && (
+                <div className="flex items-center gap-2 mb-2">
+                  <Link href={`/sellers/${product.seller.id}`} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+                    <Store className="h-3.5 w-3.5" />
+                    {product.seller.business_name}
+                  </Link>
                 </div>
-              </div>
+              )}
 
               <h1 className="text-3xl font-bold font-serif mb-3">{product.title}</h1>
 
@@ -279,15 +254,15 @@ export default function ProductDetailPage() {
                     <Star
                       key={i}
                       className={`h-4 w-4 ${
-                        i < Math.floor(product.rating)
+                        i < Math.floor(product.rating || 0)
                           ? "fill-amber-400 text-amber-400"
                           : "text-muted-foreground"
                       }`}
                     />
                   ))}
                 </div>
-                <span className="text-sm font-medium">{product.rating}</span>
-                <span className="text-sm text-muted-foreground">({product.totalReviews} reviews)</span>
+                <span className="text-sm font-medium">{product.rating?.toFixed(1) || "4.5"}</span>
+                <span className="text-sm text-muted-foreground">({product.total_reviews || 0} reviews)</span>
               </div>
             </div>
 
@@ -297,23 +272,32 @@ export default function ProductDetailPage() {
             <div className="space-y-2">
               <div className="flex items-baseline gap-3">
                 <span className="text-4xl font-bold font-mono text-destructive">
-                  ${(product.salePrice || product.price).toFixed(2)}
+                  ${product.price.toFixed(2)}
                 </span>
-                {product.salePrice && (
+                {product.compare_at_price && product.compare_at_price > product.price && (
                   <>
                     <span className="text-xl text-muted-foreground line-through font-mono">
-                      ${product.price.toFixed(2)}
+                      ${product.compare_at_price.toFixed(2)}
                     </span>
                     <Badge variant="destructive">Save {discount}%</Badge>
                   </>
                 )}
               </div>
-              {product.stock > 0 && product.stock < 10 && (
+              {product.stock_quantity > 0 && product.stock_quantity < 10 && (
                 <p className="text-sm text-amber-600 font-medium">
-                  Only {product.stock} left in stock - order soon!
+                  Only {product.stock_quantity} left in stock - order soon!
                 </p>
               )}
             </div>
+
+            <Separator />
+
+            {/* Description Preview */}
+            {product.description && (
+              <div>
+                <p className="text-muted-foreground line-clamp-3">{product.description}</p>
+              </div>
+            )}
 
             <Separator />
 
@@ -335,14 +319,14 @@ export default function ProductDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={incrementQuantity}
-                    disabled={quantity >= (product.stock || 99)}
+                    disabled={quantity >= (product.stock_quantity || 99)}
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                {product.stock > 0 && (
+                {product.stock_quantity > 0 && (
                   <span className="text-sm text-muted-foreground">
-                    {product.stock} available
+                    {product.stock_quantity} available
                   </span>
                 )}
               </div>
@@ -352,10 +336,10 @@ export default function ProductDetailPage() {
                   size="lg"
                   className="flex-1"
                   onClick={handleAddToCart}
-                  disabled={product.stock === 0}
+                  disabled={product.stock_quantity === 0}
                 >
                   <ShoppingCart className="h-5 w-5 mr-2" />
-                  {product.stock > 0 ? "Add to Cart" : "Out of Stock"}
+                  {product.stock_quantity > 0 ? "Add to Cart" : "Out of Stock"}
                 </Button>
                 <Button
                   size="lg"
@@ -405,9 +389,7 @@ export default function ProductDetailPage() {
                     <Package className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="font-medium text-sm">Warranty</p>
-                      <p className="text-xs text-muted-foreground">
-                        {product.specifications?.Warranty || "1 Year"}
-                      </p>
+                      <p className="text-xs text-muted-foreground">1 Year</p>
                     </div>
                   </div>
                 </div>
@@ -430,33 +412,38 @@ export default function ProductDetailPage() {
                 Shipping & Returns
               </TabsTrigger>
               <TabsTrigger value="reviews" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
-                Reviews ({product.totalReviews})
+                Reviews ({product.total_reviews || 0})
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="description" className="p-6">
               <div className="prose max-w-none">
-                <p className="text-muted-foreground leading-relaxed">{product.description}</p>
-                
-                <h3 className="mt-6 mb-3 font-semibold text-lg">Key Features:</h3>
-                <ul className="space-y-2 text-muted-foreground">
-                  <li>Premium build quality with attention to detail</li>
-                  <li>Latest technology for optimal performance</li>
-                  <li>Ergonomic design for comfort during extended use</li>
-                  <li>Compatible with multiple devices and platforms</li>
-                  <li>Energy efficient with long-lasting durability</li>
-                </ul>
+                {product.description ? (
+                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{product.description}</p>
+                ) : (
+                  <p className="text-muted-foreground">No description available.</p>
+                )}
               </div>
             </TabsContent>
 
             <TabsContent value="specifications" className="p-6">
               <div className="grid sm:grid-cols-2 gap-4">
-                {Object.entries(product.specifications).map(([key, value]) => (
-                  <div key={key} className="flex justify-between py-3 border-b">
-                    <span className="font-medium">{key}</span>
-                    <span className="text-muted-foreground">{value as string}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between py-3 border-b">
+                  <span className="font-medium">SKU</span>
+                  <span className="text-muted-foreground">{product.sku || "N/A"}</span>
+                </div>
+                <div className="flex justify-between py-3 border-b">
+                  <span className="font-medium">Brand</span>
+                  <span className="text-muted-foreground">{product.brand || "N/A"}</span>
+                </div>
+                <div className="flex justify-between py-3 border-b">
+                  <span className="font-medium">Condition</span>
+                  <span className="text-muted-foreground">New</span>
+                </div>
+                <div className="flex justify-between py-3 border-b">
+                  <span className="font-medium">Stock</span>
+                  <span className="text-muted-foreground">{product.stock_quantity || 0} units</span>
+                </div>
               </div>
             </TabsContent>
 
@@ -500,24 +487,27 @@ export default function ProductDetailPage() {
         </Card>
 
         {/* Related Products */}
-        <div>
-          <h2 className="text-2xl font-bold font-serif mb-6">Related Products</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {relatedProducts.map((relatedProduct) => (
-              <ProductCard 
-                key={relatedProduct.id} 
-                id={relatedProduct.id}
-                title={relatedProduct.title}
-                price={relatedProduct.salePrice || relatedProduct.price}
-                compareAtPrice={relatedProduct.salePrice ? relatedProduct.price : undefined}
-                image={relatedProduct.images[0]?.url}
-                rating={relatedProduct.rating}
-                reviewCount={relatedProduct.totalReviews}
-                sellerName={relatedProduct.seller.business_name}
-              />
-            ))}
+        {relatedProducts.length > 0 && (
+          <div>
+            <h2 className="text-2xl font-bold font-serif mb-6">Related Products</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {relatedProducts.map((relatedProduct) => (
+                <ProductCard 
+                  key={relatedProduct.id} 
+                  id={relatedProduct.id}
+                  title={relatedProduct.title}
+                  price={relatedProduct.price}
+                  compareAtPrice={relatedProduct.compare_at_price}
+                  image={relatedProduct.images?.[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600"}
+                  rating={relatedProduct.rating || 4.5}
+                  reviewCount={relatedProduct.total_reviews || 0}
+                  sellerName={relatedProduct.seller?.business_name || "Unknown Seller"}
+                  sellerId={relatedProduct.seller?.id}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </CustomerLayout>
   );

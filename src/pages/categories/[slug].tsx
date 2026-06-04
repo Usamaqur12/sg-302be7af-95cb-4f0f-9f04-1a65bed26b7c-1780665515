@@ -10,115 +10,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Filter } from "lucide-react";
-
-// Mock categories and products
-const MOCK_CATEGORIES: Record<string, any> = {
-  electronics: {
-    id: "electronics",
-    name: "Electronics",
-    slug: "electronics",
-    description: "Discover the latest in consumer electronics, from smartphones to smart home devices.",
-    image_url: "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1200",
-    product_count: 1248,
-  },
-  fashion: {
-    id: "fashion",
-    name: "Fashion",
-    slug: "fashion",
-    description: "Stay stylish with our curated collection of clothing, shoes, and accessories.",
-    image_url: "https://images.unsplash.com/photo-1445205170230-053b83016050?w=1200",
-    product_count: 3421,
-  },
-  "home-garden": {
-    id: "home-garden",
-    name: "Home & Garden",
-    slug: "home-garden",
-    description: "Transform your living space with furniture, decor, and garden essentials.",
-    image_url: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200",
-    product_count: 892,
-  },
-};
-
-const MOCK_PRODUCTS = [
-  {
-    id: "prod-1",
-    title: "Wireless Noise-Cancelling Headphones",
-    price: 199.99,
-    compare_at_price: 299.99,
-    rating: 4.8,
-    total_reviews: 1247,
-    images: [{ url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400" }],
-    seller: { business_name: "TechWorld Store" },
-  },
-  {
-    id: "prod-2",
-    title: "4K Smart TV 55 inch",
-    price: 599.99,
-    compare_at_price: 799.99,
-    rating: 4.6,
-    total_reviews: 892,
-    images: [{ url: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400" }],
-    seller: { business_name: "ElectroHub" },
-  },
-  {
-    id: "prod-3",
-    title: "Wireless Gaming Mouse",
-    price: 79.99,
-    rating: 4.7,
-    total_reviews: 634,
-    images: [{ url: "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=400" }],
-    seller: { business_name: "GamerGear" },
-  },
-  {
-    id: "prod-4",
-    title: "Portable Bluetooth Speaker",
-    price: 49.99,
-    compare_at_price: 69.99,
-    rating: 4.5,
-    total_reviews: 423,
-    images: [{ url: "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400" }],
-    seller: { business_name: "AudioMax" },
-  },
-  {
-    id: "prod-5",
-    title: "Smart Watch Pro",
-    price: 299.99,
-    compare_at_price: 399.99,
-    rating: 4.9,
-    total_reviews: 1834,
-    images: [{ url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400" }],
-    seller: { business_name: "WearTech" },
-  },
-  {
-    id: "prod-6",
-    title: "Mechanical Keyboard RGB",
-    price: 129.99,
-    rating: 4.6,
-    total_reviews: 567,
-    images: [{ url: "https://images.unsplash.com/photo-1595225476474-87563907a212?w=400" }],
-    seller: { business_name: "KeyMasters" },
-  },
-  {
-    id: "prod-7",
-    title: "Wireless Earbuds Pro",
-    price: 149.99,
-    compare_at_price: 199.99,
-    rating: 4.7,
-    total_reviews: 1034,
-    images: [{ url: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400" }],
-    seller: { business_name: "AudioMax" },
-  },
-  {
-    id: "prod-8",
-    title: "USB-C Hub 7-in-1",
-    price: 39.99,
-    rating: 4.4,
-    total_reviews: 289,
-    images: [{ url: "https://images.unsplash.com/photo-1625948515291-69613efd103f?w=400" }],
-    seller: { business_name: "TechAccessories" },
-  },
-];
+import { Filter, Loader2 } from "lucide-react";
 
 interface Category {
   id: string;
@@ -140,85 +32,85 @@ export default function CategoryDetailPage() {
 
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
-
-    async function fetchCategory() {
-      setLoading(true);
-      try {
-        // Fetch category by slug
-        const { data: categoryData, error: categoryError } = await supabase
-          .from("categories")
-          .select("*")
-          .eq("slug", slug as string)
-          .single();
-
-        if (categoryError || !categoryData) {
-          console.error("Category not found:", categoryError);
-          setCategory(null);
-          setProducts([]);
-          setLoading(false);
-          return;
-        }
-
-        setCategory({
-          id: categoryData.id,
-          name: categoryData.name,
-          slug: categoryData.slug,
-          description: categoryData.description || `Discover the latest in ${categoryData.name}.`,
-          image_url: categoryData.image_url || "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1200",
-          product_count: 0,
-        });
-
-        // Fetch products in this category (approved only)
-        const { data: productsData, error: productsError } = await supabase
-          .from("products")
-          .select(`
-            id,
-            title,
-            price,
-            compare_at_price,
-            rating,
-            total_reviews,
-            images:product_images(url),
-            seller:seller_profiles!seller_id(id, business_name)
-          `)
-          .eq("category_id", categoryData.id)
-          .eq("status", "approved")
-          .limit(24);
-
-        if (productsError) {
-          console.error("Error fetching products:", productsError);
-        }
-
-        const formattedProducts = (productsData || []).map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          price: p.price,
-          compare_at_price: p.compare_at_price,
-          rating: p.rating || 4.5,
-          total_reviews: p.total_reviews || 0,
-          images: p.images || [],
-          seller: p.seller,
-        }));
-
-        setProducts(formattedProducts);
-        
-        // Update category product count
-        setCategory(prev => prev ? { ...prev, product_count: formattedProducts.length } : null);
-      } catch (error) {
-        console.error("Error fetching category:", error);
-        setCategory(null);
-        setProducts([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchCategory();
   }, [slug]);
 
+  async function fetchCategory() {
+    if (!slug || typeof slug !== 'string') return;
+
+    setLoading(true);
+    try {
+      // Fetch category by slug
+      const { data: categoryData, error: categoryError } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("slug", slug as string)
+        .single();
+
+      if (categoryError || !categoryData) {
+        console.error("Category not found:", categoryError);
+        setCategory(null);
+        setProducts([]);
+        setLoading(false);
+        return;
+      }
+
+      setCategory({
+        id: categoryData.id,
+        name: categoryData.name,
+        slug: categoryData.slug,
+        description: categoryData.description || `Discover the latest in ${categoryData.name}.`,
+        image_url: categoryData.image_url || "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1200",
+        product_count: 0,
+      });
+
+      // Fetch products in this category (approved only)
+      const { data: productsData, error: productsError } = await supabase
+        .from("products")
+        .select(`
+          id,
+          title,
+          price,
+          compare_at_price,
+          rating,
+          total_reviews,
+          images:product_images(url),
+          seller:seller_profiles!seller_id(id, business_name)
+        `)
+        .eq("category_id", categoryData.id)
+        .eq("status", "approved")
+        .limit(48);
+
+      if (productsError) {
+        console.error("Error fetching products:", productsError);
+      }
+
+      const formattedProducts = (productsData || []).map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        price: p.price,
+        compare_at_price: p.compare_at_price,
+        rating: p.rating || 4.5,
+        total_reviews: p.total_reviews || 0,
+        images: p.images || [],
+        seller: p.seller,
+      }));
+
+      setProducts(formattedProducts);
+      
+      // Update category product count
+      setCategory(prev => prev ? { ...prev, product_count: formattedProducts.length } : null);
+    } catch (error) {
+      console.error("Error fetching category:", error);
+      setCategory(null);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const handleSortChange = (value: string) => {
     setSortBy(value);
-    // Sort logic here
     const sorted = [...products];
     switch (value) {
       case "price_asc":
@@ -231,10 +123,8 @@ export default function CategoryDetailPage() {
         sorted.sort((a, b) => b.rating - a.rating);
         break;
       case "newest":
-        // Already in order
         break;
       default:
-        // popular - by total_reviews
         sorted.sort((a, b) => b.total_reviews - a.total_reviews);
     }
     setProducts(sorted);
@@ -243,10 +133,10 @@ export default function CategoryDetailPage() {
   if (loading) {
     return (
       <CustomerLayout>
-        <div className="container py-16 text-center">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/3 mx-auto"></div>
-            <div className="h-4 bg-muted rounded w-1/2 mx-auto"></div>
+        <div className="container py-16 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Loading category...</p>
           </div>
         </div>
       </CustomerLayout>
@@ -287,13 +177,13 @@ export default function CategoryDetailPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-3">{category.name}</h1>
           <p className="text-muted-foreground text-lg mb-4">{category.description}</p>
-          <Badge variant="secondary">{category.product_count || products.length} Products</Badge>
+          <Badge variant="secondary">{products.length} Products</Badge>
         </div>
 
         {/* Sort and Filter */}
         <div className="flex items-center justify-between mb-6">
           <p className="text-sm text-muted-foreground">
-            Showing {products.length} of {category.product_count || products.length} products
+            Showing {products.length} products
           </p>
 
           <div className="flex items-center gap-4">
@@ -337,7 +227,8 @@ export default function CategoryDetailPage() {
           </div>
         ) : (
           <Card className="p-12 text-center">
-            <p className="text-muted-foreground mb-4">No products found in this category.</p>
+            <p className="text-lg font-semibold mb-2">No products found</p>
+            <p className="text-muted-foreground mb-4">This category doesn't have any products yet.</p>
             <Button onClick={() => router.push("/categories")}>Browse Other Categories</Button>
           </Card>
         )}
