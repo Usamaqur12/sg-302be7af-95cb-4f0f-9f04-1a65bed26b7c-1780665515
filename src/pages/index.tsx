@@ -157,7 +157,7 @@ export default function HomePage() {
       // Fetch featured vendors (verified sellers)
       const { data: vendorsData } = await supabase
         .from("seller_profiles")
-        .select("id, business_name, logo_url, average_rating")
+        .select("id, business_name, logo_url")
         .eq("status", "approved")
         .not("verified_at", "is", null)
         .limit(4);
@@ -167,7 +167,7 @@ export default function HomePage() {
           id: v.id,
           name: v.business_name,
           logo: v.logo_url || "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200&h=200&fit=crop",
-          rating: v.average_rating || 4.5,
+          rating: 4.5, // Default rating since average_rating column doesn't exist
           products: 0,
           verified: true,
         })));
