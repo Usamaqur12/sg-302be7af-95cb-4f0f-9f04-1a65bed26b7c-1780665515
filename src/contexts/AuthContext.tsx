@@ -2,22 +2,14 @@
 
 import { createContext, useContext, ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { User } from "@supabase/supabase-js";
-
-interface UserProfile {
-  id: string;
-  email: string;
-  full_name: string;
-  role: "customer" | "vendor" | "admin";
-  phone?: string;
-}
+import type { MockUser } from "@/lib/mockAuth";
 
 interface AuthContextType {
-  user: User | null;
-  profile: UserProfile | null;
+  user: MockUser | null;
+  profile: MockUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string, fullName: string, role?: "customer" | "vendor" | "admin") => Promise<any>;
+  signUp: (email: string, password: string, fullName: string) => Promise<any>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;

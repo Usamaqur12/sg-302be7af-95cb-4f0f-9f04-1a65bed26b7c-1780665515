@@ -25,7 +25,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await authService.signOut();
-    router.push("/");
+    router.push("/admin/login");
   };
 
   const navItems = [
