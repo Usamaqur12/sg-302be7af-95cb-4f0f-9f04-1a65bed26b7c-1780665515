@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { SellerLayout } from "@/components/SellerLayout";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,8 +94,50 @@ const MOCK_DASHBOARD_DATA = {
 
 export default function SellerDashboardPage() {
   const { user } = useAuthContext();
+  const [stats, setStats] = useState<SellerStats | null>(null);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const { stats, recentOrders, topProducts } = MOCK_DASHBOARD_DATA;
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      // Mock data for now
+      setStats({
+        totalRevenue: 45230.5,
+        totalOrders: 156,
+        totalProducts: 24,
+        pendingOrders: 8,
+        revenueChange: 12.5,
+        ordersChange: 8.3,
+      });
+
+      setRecentOrders([
+        {
+          id: "1",
+          orderNumber: "ORD-2024-001",
+          customer: "John Doe",
+          total: 299.99,
+          status: "pending",
+          date: "2024-01-15",
+        },
+        {
+          id: "2",
+          orderNumber: "ORD-2024-002",
+          customer: "Jane Smith",
+          total: 149.5,
+          status: "processing",
+          date: "2024-01-14",
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
@@ -110,7 +153,7 @@ export default function SellerDashboardPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={["vendor"]}>
+    <RoleGuard allowedRoles={["seller"]}>
       <SellerLayout>
         <div className="space-y-8">
           {/* Header */}

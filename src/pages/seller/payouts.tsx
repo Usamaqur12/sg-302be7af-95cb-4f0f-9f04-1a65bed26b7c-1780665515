@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { SellerLayout } from "@/components/SellerLayout";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,37 +10,44 @@ import { DollarSign, TrendingUp, Clock, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function SellerPayoutsPage() {
-  // Mock payout data
-  const payouts = [
-    {
-      id: "PAYOUT-001",
-      amount: 2450.00,
-      status: "completed",
-      date: "2026-06-01",
-      method: "Bank Transfer",
-      reference: "TXN-123456",
-    },
-    {
-      id: "PAYOUT-002",
-      amount: 1890.50,
-      status: "processing",
-      date: "2026-06-04",
-      method: "Bank Transfer",
-      reference: "TXN-123457",
-    },
-    {
-      id: "PAYOUT-003",
-      amount: 3120.75,
-      status: "pending",
-      date: "2026-06-05",
-      method: "Bank Transfer",
-      reference: "-",
-    },
-  ];
+  const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [availableBalance, setAvailableBalance] = useState(0);
+
+  useEffect(() => {
+    loadPayouts();
+  }, []);
+
+  const loadPayouts = async () => {
+    try {
+      // Mock data
+      setAvailableBalance(2450.75);
+      setPayouts([
+        {
+          id: "1",
+          amount: 1500.0,
+          status: "completed",
+          date: "2024-01-10",
+          method: "Bank Transfer",
+        },
+        {
+          id: "2",
+          amount: 850.5,
+          status: "pending",
+          date: "2024-01-15",
+          method: "Bank Transfer",
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to load payouts:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stats = {
-    availableBalance: 3120.75,
-    pendingPayouts: 1890.50,
+    availableBalance: 2450.75,
+    pendingPayouts: 850.5,
     totalEarnings: 94350,
     nextPayoutDate: "2026-06-07",
   };
@@ -52,7 +60,7 @@ export default function SellerPayoutsPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={["vendor"]}>
+    <RoleGuard allowedRoles={["seller"]}>
       <SellerLayout>
         <div className="space-y-8">
           <div>

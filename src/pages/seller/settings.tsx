@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Save, Store, Bell, CreditCard } from "lucide-react";
 
 export default function SellerSettingsPage() {
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const [settings, setSettings] = useState({
     shopName: "TechGear Store",
@@ -26,15 +27,36 @@ export default function SellerSettingsPage() {
     autoApproveReturns: false,
   });
 
-  const handleSave = () => {
-    toast({
-      title: "Settings Saved",
-      description: "Your store settings have been updated successfully",
-    });
+  const [businessInfo, setBusinessInfo] = useState({
+    businessName: "Tech Store Pro",
+    email: "contact@techstorepro.com",
+    phone: "+1 (555) 123-4567",
+    address: "123 Business St, City, State 12345",
+    description: "Your trusted source for quality tech products.",
+  });
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      // Save settings logic here
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      toast({
+        title: "Settings Saved",
+        description: "Your settings have been updated successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <RoleGuard allowedRoles={["vendor"]}>
+    <RoleGuard allowedRoles={["seller"]}>
       <SellerLayout>
         <div className="space-y-8">
           <div>

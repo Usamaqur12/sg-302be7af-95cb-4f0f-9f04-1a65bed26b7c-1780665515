@@ -20,7 +20,7 @@ export default function SellerAnalyticsPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={["vendor"]}>
+    <RoleGuard allowedRoles={["seller"]}>
       <SellerLayout>
         <div className="space-y-8">
           <div>

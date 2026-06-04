@@ -1,15 +1,15 @@
 "use client";
 
 import { SellerLayout } from "@/components/SellerLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { RoleGuard } from "@/components/RoleGuard";
+import { Clock, Mail, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Clock, Mail, Phone, HelpCircle } from "lucide-react";
 import Link from "next/link";
 
-export default function SellerPendingApprovalPage() {
+export default function PendingApprovalPage() {
   return (
-    <ProtectedRoute requiredRole="vendor">
+    <RoleGuard allowedRoles={["seller"]}>
       <SellerLayout>
         <div className="container max-w-3xl mx-auto py-12">
           <Card>
@@ -71,6 +71,6 @@ export default function SellerPendingApprovalPage() {
           </Card>
         </div>
       </SellerLayout>
-    </ProtectedRoute>
+    </RoleGuard>
   );
 }

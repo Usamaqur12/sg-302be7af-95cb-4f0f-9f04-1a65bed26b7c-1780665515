@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { SellerLayout } from "@/components/SellerLayout";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,49 +8,66 @@ import { Badge } from "@/components/ui/badge";
 import { Star, ThumbsUp, MessageCircle, TrendingUp } from "lucide-react";
 
 export default function SellerReviewsPage() {
-  // Mock review data
-  const reviews = [
-    {
-      id: 1,
-      product: "Premium Wireless Headphones",
-      customer: "Sarah Johnson",
-      rating: 5,
-      comment: "Absolutely amazing quality! Sound is crystal clear and battery lasts forever.",
-      date: "2026-06-03",
-      helpful: 12,
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    averageRating: 0,
+    totalReviews: 0,
+    distribution: {
+      5: 0,
+      4: 0,
+      3: 0,
+      2: 0,
+      1: 0,
     },
-    {
-      id: 2,
-      product: "Smart Watch Pro",
-      customer: "Mike Chen",
-      rating: 4,
-      comment: "Great product, works well. Only minor issue is the strap could be better quality.",
-      date: "2026-06-02",
-      helpful: 8,
-    },
-    {
-      id: 3,
-      product: "Laptop Stand Aluminum",
-      customer: "Emma Davis",
-      rating: 5,
-      comment: "Perfect height and very sturdy. My back pain is gone after using this!",
-      date: "2026-06-01",
-      helpful: 15,
-    },
-  ];
+  });
 
-  const stats = {
-    averageRating: 4.7,
-    totalReviews: 342,
-    fiveStars: 245,
-    fourStars: 67,
-    threeStars: 18,
-    twoStars: 8,
-    oneStars: 4,
+  useEffect(() => {
+    loadReviews();
+  }, []);
+
+  const loadReviews = async () => {
+    try {
+      // Mock data
+      setStats({
+        averageRating: 4.5,
+        totalReviews: 128,
+        distribution: {
+          5: 80,
+          4: 30,
+          3: 10,
+          2: 5,
+          1: 3,
+        },
+      });
+
+      setReviews([
+        {
+          id: "1",
+          customer: "John Doe",
+          product: "Premium Headphones",
+          rating: 5,
+          comment: "Excellent product! Very satisfied with the quality.",
+          date: "2024-01-15",
+        },
+        {
+          id: "2",
+          customer: "Jane Smith",
+          product: "Wireless Mouse",
+          rating: 4,
+          comment: "Good product, fast shipping.",
+          date: "2024-01-14",
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to load reviews:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <RoleGuard allowedRoles={["vendor"]}>
+    <RoleGuard allowedRoles={["seller"]}>
       <SellerLayout>
         <div className="space-y-8">
           <div>
@@ -97,9 +115,9 @@ export default function SellerReviewsPage() {
                   <p className="text-sm text-muted-foreground">5-Star Reviews</p>
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <p className="text-2xl font-bold">{stats.fiveStars}</p>
+                <p className="text-2xl font-bold">{stats.distribution[5]}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {((stats.fiveStars / stats.totalReviews) * 100).toFixed(0)}% of total
+                  {((stats.distribution[5] / stats.totalReviews) * 100).toFixed(0)}% of total
                 </p>
               </CardContent>
             </Card>
