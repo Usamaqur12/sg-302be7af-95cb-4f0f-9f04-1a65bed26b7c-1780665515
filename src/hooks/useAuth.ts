@@ -4,16 +4,27 @@ import { mockAuth, type MockUser } from "@/lib/mockAuth";
 export function useAuth() {
   const [user, setUser] = useState<MockUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Check for existing session on mount
+    // Only check auth after component mounts (client-side only)
     checkAuth();
   }, []);
 
   const checkAuth = () => {
-    const currentUser = mockAuth.getCurrentUser();
-    setUser(currentUser);
-    setLoading(false);
+    try {
+      const currentUser = mockAuth.getCurrentUser();
+      const authenticated = mockAuth.isAuthenticated();
+      
+      setUser(currentUser);
+      setIsAuthenticated(authenticated);
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      setUser(null);
+      setIsAuthenticated(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signIn = async (email: string, password: string) => {
@@ -21,6 +32,7 @@ export function useAuth() {
     
     if (response.success && response.user) {
       setUser(response.user);
+      setIsAuthenticated(true);
       return response;
     }
     
@@ -32,6 +44,7 @@ export function useAuth() {
     
     if (response.success && response.user) {
       setUser(response.user);
+      setIsAuthenticated(true);
       return response;
     }
     
@@ -41,6 +54,7 @@ export function useAuth() {
   const signOut = async () => {
     mockAuth.logout();
     setUser(null);
+    setIsAuthenticated(false);
   };
 
   return {
@@ -50,7 +64,7 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    isAuthenticated: mockAuth.isAuthenticated(),
+    isAuthenticated,
     isAdmin: user?.role === "admin",
     isVendor: user?.role === "vendor",
     isCustomer: user?.role === "customer",

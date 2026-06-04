@@ -1,5 +1,45 @@
 // Mock Authentication Service
 // Uses localStorage for demo purposes until backend is ready
+// SSR-safe with browser environment checks
+
+// Check if we're in the browser
+const isBrowser = typeof window !== "undefined";
+
+// Safe localStorage wrapper
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    if (!isBrowser) return null;
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    if (!isBrowser) return;
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Silently fail if localStorage is not available
+    }
+  },
+  removeItem: (key: string): void => {
+    if (!isBrowser) return;
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Silently fail
+    }
+  },
+  clear: (): void => {
+    if (!isBrowser) return;
+    try {
+      localStorage.clear();
+    } catch {
+      // Silently fail
+    }
+  },
+};
 
 export interface MockUser {
   id: string;
@@ -79,9 +119,9 @@ export const mockAuth = {
     // Create mock token
     const token = `mock_token_${user.id}_${Date.now()}`;
 
-    // Store in localStorage
-    localStorage.setItem("auth_token", token);
-    localStorage.setItem("auth_user", JSON.stringify(user));
+    // Store in localStorage (browser only)
+    safeStorage.setItem("auth_token", token);
+    safeStorage.setItem("auth_user", JSON.stringify(user));
 
     return {
       success: true,
@@ -113,10 +153,10 @@ export const mockAuth = {
     };
 
     // In a real app, this would be saved to database
-    // For now, just store in localStorage
+    // For now, just store in localStorage (browser only)
     const token = `mock_token_${newUser.id}_${Date.now()}`;
-    localStorage.setItem("auth_token", token);
-    localStorage.setItem("auth_user", JSON.stringify(newUser));
+    safeStorage.setItem("auth_token", token);
+    safeStorage.setItem("auth_user", JSON.stringify(newUser));
 
     return {
       success: true,
@@ -125,9 +165,11 @@ export const mockAuth = {
     };
   },
 
-  // Get current user from localStorage
+  // Get current user from localStorage (SSR-safe)
   getCurrentUser: (): MockUser | null => {
-    const userJson = localStorage.getItem("auth_user");
+    if (!isBrowser) return null;
+
+    const userJson = safeStorage.getItem("auth_user");
     if (!userJson) return null;
 
     try {
@@ -137,21 +179,31 @@ export const mockAuth = {
     }
   },
 
-  // Get current token
+  // Get current token (SSR-safe)
   getToken: (): string | null => {
-    return localStorage.getItem("auth_token");
+    if (!isBrowser) return null;
+    return safeStorage.getItem("auth_token");
   },
 
-  // Check if user is authenticated
+  // Check if user is authenticated (SSR-safe)
   isAuthenticated: (): boolean => {
-    const token = localStorage.getItem("auth_token");
-    const user = localStorage.getItem("auth_user");
+    if (!isBrowser) return false;
+
+    const token = safeStorage.getItem("auth_token");
+    const user = safeStorage.getItem("auth_user");
+
     return !!(token && user);
   },
 
-  // Logout
+  // Logout (browser only)
   logout: (): void => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("auth_user");
+    safeStorage.removeItem("auth_token");
+    safeStorage.removeItem("auth_user");
+  },
+
+  // Clear all auth data (browser only)
+  clearAuth: (): void => {
+    safeStorage.removeItem("auth_token");
+    safeStorage.removeItem("auth_user");
   },
 };
