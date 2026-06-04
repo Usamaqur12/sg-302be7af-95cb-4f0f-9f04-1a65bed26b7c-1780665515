@@ -10,18 +10,27 @@ export const productService = {
     search?: string;
     min_price?: number;
     max_price?: number;
-    status?: string;
+    status?: "draft" | "pending" | "approved" | "rejected" | "inactive";
     limit?: number;
     offset?: number;
   }) => {
     let query = supabase
       .from("products")
       .select(`
-        *,
+        id,
+        title,
+        slug,
+        description,
+        price,
+        compare_at_price,
+        rating,
+        total_reviews,
+        stock_quantity,
+        status,
         images:product_images(id, url, display_order),
         category:categories(id, name, slug),
-        seller:seller_profiles(id, business_name, rating, total_reviews)
-      `)
+        seller:seller_profiles!seller_id(id, business_name)
+      `, { count: "exact" })
       .order("created_at", { ascending: false });
 
     if (filters?.category_id) {
@@ -36,11 +45,11 @@ export const productService = {
       query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
 
-    if (filters?.min_price) {
+    if (filters?.min_price !== undefined) {
       query = query.gte("price", filters.min_price);
     }
 
-    if (filters?.max_price) {
+    if (filters?.max_price !== undefined) {
       query = query.lte("price", filters.max_price);
     }
 
@@ -75,8 +84,7 @@ export const productService = {
         *,
         images:product_images(id, url, display_order),
         category:categories(id, name, slug),
-        seller:seller_profiles(id, business_name, rating, total_reviews),
-        variants:product_variants(*)
+        seller:seller_profiles!seller_id(id, business_name, logo_url)
       `)
       .eq("id", id)
       .single();
@@ -94,7 +102,7 @@ export const productService = {
     category_id: string;
     seller_id: string;
     price: number;
-    sale_price?: number;
+    compare_at_price?: number;
     stock_quantity: number;
     sku: string;
     images: string[];
@@ -107,7 +115,7 @@ export const productService = {
         category_id: productData.category_id,
         seller_id: productData.seller_id,
         price: productData.price,
-        sale_price: productData.sale_price,
+        compare_at_price: productData.compare_at_price,
         stock_quantity: productData.stock_quantity,
         sku: productData.sku,
         status: "pending",
@@ -138,15 +146,18 @@ export const productService = {
   /**
    * Update product
    */
-  updateProduct: async (id: string, updates: Partial<{
-    title: string;
-    description: string;
-    category_id: string;
-    price: number;
-    sale_price: number;
-    stock_quantity: number;
-    status: string;
-  }>) => {
+  updateProduct: async (
+    id: string,
+    updates: Partial<{
+      title: string;
+      description: string;
+      category_id: string;
+      price: number;
+      compare_at_price: number;
+      stock_quantity: number;
+      status: "draft" | "pending" | "approved" | "rejected" | "inactive";
+    }>
+  ) => {
     const { data, error } = await supabase
       .from("products")
       .update(updates)
