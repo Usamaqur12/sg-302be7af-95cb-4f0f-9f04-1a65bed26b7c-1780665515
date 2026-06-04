@@ -10,7 +10,7 @@ import Link from "next/link";
 
 interface RoleGuardProps {
   children: React.ReactNode;
-  allowedRoles: Array<"customer" | "vendor" | "admin">;
+  allowedRoles: Array<"customer" | "seller" | "admin">;
   redirectTo?: string;
 }
 
@@ -25,7 +25,7 @@ export function RoleGuard({ children, allowedRoles, redirectTo }: RoleGuardProps
       // Determine redirect based on required role
       if (allowedRoles.includes("admin")) {
         router.push("/admin/login");
-      } else if (allowedRoles.includes("vendor")) {
+      } else if (allowedRoles.includes("seller")) {
         router.push("/seller/login");
       } else {
         router.push("/login");
@@ -66,7 +66,7 @@ export function RoleGuard({ children, allowedRoles, redirectTo }: RoleGuardProps
               <Button asChild>
                 <Link href="/">Go to Homepage</Link>
               </Button>
-              {profile.role === "vendor" && (
+              {profile.role === "seller" && (
                 <Button variant="outline" asChild>
                   <Link href="/seller">Go to Seller Dashboard</Link>
                 </Button>

@@ -7,7 +7,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAuth?: boolean;
-  requiredRole?: "customer" | "vendor" | "admin";
+  requiredRole?: "customer" | "seller" | "admin";
   redirectTo?: string;
 }
 
@@ -31,7 +31,7 @@ export function ProtectedRoute({
 
     // Check role
     if (requiredRole && profile?.role !== requiredRole) {
-      if (profile?.role === "vendor") {
+      if (profile?.role === "seller") {
         router.push("/seller");
       } else if (profile?.role === "admin") {
         router.push("/admin");
