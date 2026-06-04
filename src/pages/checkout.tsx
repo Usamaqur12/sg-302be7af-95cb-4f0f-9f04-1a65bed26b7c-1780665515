@@ -170,8 +170,6 @@ export default function CheckoutPage() {
           customer_id: user.id,
           order_number: orderNumber,
           status: "pending",
-          shipping_cost: shipping,
-          tax_amount: tax,
           total_amount: total,
           shipping_full_name: shippingData.fullName,
           shipping_email: shippingData.email,
