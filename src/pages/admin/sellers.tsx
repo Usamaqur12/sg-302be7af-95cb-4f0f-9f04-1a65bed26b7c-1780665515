@@ -57,7 +57,7 @@ export default function AdminSellersPage() {
       const { error } = await supabase
         .from("seller_profiles")
         .update({ 
-          verification_status: "approved", 
+          status: "approved", 
           verified_at: new Date().toISOString() 
         })
         .eq("id", sellerId);
@@ -86,7 +86,7 @@ export default function AdminSellersPage() {
       const { error } = await supabase
         .from("seller_profiles")
         .update({ 
-          verification_status: "rejected",
+          status: "rejected",
           verified_at: null
         })
         .eq("id", sellerId);
@@ -116,7 +116,7 @@ export default function AdminSellersPage() {
       const { error } = await supabase
         .from("seller_profiles")
         .update({ 
-          verification_status: "suspended" 
+          status: "suspended" 
         })
         .eq("id", sellerId);
 
@@ -145,7 +145,7 @@ export default function AdminSellersPage() {
       const { error } = await supabase
         .from("seller_profiles")
         .update({ 
-          verification_status: "approved",
+          status: "approved",
           verified_at: new Date().toISOString()
         })
         .eq("id", sellerId);
@@ -174,16 +174,16 @@ export default function AdminSellersPage() {
       seller.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       seller.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesFilter = filter === "all" || seller.verification_status === filter;
+    const matchesFilter = filter === "all" || seller.status === filter;
 
     return matchesSearch && matchesFilter;
   });
 
   const statusCounts = {
     all: sellers.length,
-    pending: sellers.filter((s) => s.verification_status === "pending" || !s.verification_status).length,
-    approved: sellers.filter((s) => s.verification_status === "approved").length,
-    rejected: sellers.filter((s) => s.verification_status === "rejected").length,
+    pending: sellers.filter((s) => s.status === "pending" || !s.status).length,
+    approved: sellers.filter((s) => s.status === "approved").length,
+    rejected: sellers.filter((s) => s.status === "rejected").length,
   };
 
   return (
@@ -240,25 +240,25 @@ export default function AdminSellersPage() {
                               {seller.profiles?.email} • {seller.profiles?.full_name}
                             </p>
                             <div className="flex items-center gap-2 mb-2">
-                              {seller.verification_status === "approved" && seller.verified_at && (
+                              {seller.status === "approved" && seller.verified_at && (
                                 <Badge variant="default" className="bg-green-500/10 text-green-700">
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   Approved
                                 </Badge>
                               )}
-                              {seller.verification_status === "rejected" && (
+                              {seller.status === "rejected" && (
                                 <Badge variant="destructive">
                                   <XCircle className="h-3 w-3 mr-1" />
                                   Rejected
                                 </Badge>
                               )}
-                              {seller.verification_status === "suspended" && (
+                              {seller.status === "suspended" && (
                                 <Badge variant="destructive">
                                   <Ban className="h-3 w-3 mr-1" />
                                   Suspended
                                 </Badge>
                               )}
-                              {(!seller.verification_status || seller.verification_status === "pending") && (
+                              {(!seller.status || seller.status === "pending") && (
                                 <Badge variant="secondary">
                                   <Clock className="h-3 w-3 mr-1" />
                                   Pending Approval
@@ -301,7 +301,7 @@ export default function AdminSellersPage() {
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        {(!seller.verification_status || seller.verification_status === "pending") && (
+                        {(!seller.status || seller.status === "pending") && (
                           <>
                             <Button
                               onClick={() => handleApproveSeller(seller.id, seller.business_name)}
@@ -322,7 +322,7 @@ export default function AdminSellersPage() {
                           </>
                         )}
 
-                        {seller.verification_status === "approved" && (
+                        {seller.status === "approved" && (
                           <Button
                             variant="destructive"
                             onClick={() => handleSuspendSeller(seller.id, seller.business_name)}
@@ -333,7 +333,7 @@ export default function AdminSellersPage() {
                           </Button>
                         )}
 
-                        {(seller.verification_status === "rejected" || seller.verification_status === "suspended") && (
+                        {(seller.status === "rejected" || seller.status === "suspended") && (
                           <Button
                             onClick={() => handleActivateSeller(seller.id, seller.business_name)}
                             className="gap-2"
