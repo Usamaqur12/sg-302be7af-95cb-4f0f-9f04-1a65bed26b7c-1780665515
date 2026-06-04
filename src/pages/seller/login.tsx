@@ -10,10 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, Store } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function SellerLoginPage() {
   const router = useRouter();
-  const { signIn } = useAuthContext();
+  const { signIn, signOut } = useAuthContext();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -34,15 +35,33 @@ export default function SellerLoginPage() {
 
       const user = response.user;
 
-      // Check if user is a vendor
-      if (user.role !== "vendor") {
+      // Get user profile to verify they are a vendor
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError || profile?.role !== "vendor") {
         toast({
           title: "Access Denied",
           description: "This account is not registered as a seller",
           variant: "destructive",
         });
+        await signOut();
         setLoading(false);
         return;
+      }
+
+      // Get seller profile to check verification status
+      const { data: sellerProfile, error: sellerError } = await supabase
+        .from("seller_profiles")
+        .select("verification_status")
+        .eq("user_id", user.id)
+        .single();
+
+      if (sellerError) {
+        console.error("Seller profile fetch error:", sellerError);
       }
 
       toast({
@@ -52,14 +71,17 @@ export default function SellerLoginPage() {
 
       // Check seller status and redirect accordingly
       setTimeout(() => {
-        if (user.status === "pending") {
+        const status = sellerProfile?.verification_status;
+        
+        if (status === "pending" || !status) {
           router.push("/seller/pending-approval");
-        } else if (user.status === "suspended") {
+        } else if (status === "suspended" || status === "rejected") {
           toast({
             title: "Account Suspended",
             description: "Your seller account has been suspended. Contact support for assistance.",
             variant: "destructive",
           });
+          signOut();
           setLoading(false);
         } else {
           router.push("/seller");

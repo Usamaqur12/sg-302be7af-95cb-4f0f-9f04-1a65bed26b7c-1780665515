@@ -10,10 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, Shield } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { signIn } = useAuthContext();
+  const { signIn, signOut } = useAuthContext();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -34,13 +35,20 @@ export default function AdminLoginPage() {
 
       const user = response.user;
 
-      // Check if user is admin
-      if (user.role !== "admin") {
+      // Get user profile to verify they are an admin
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError || profile?.role !== "admin") {
         toast({
           title: "Access Denied",
           description: "This account does not have admin privileges",
           variant: "destructive",
         });
+        await signOut();
         setLoading(false);
         return;
       }

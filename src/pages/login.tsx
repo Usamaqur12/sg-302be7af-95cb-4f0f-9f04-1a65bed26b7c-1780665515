@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ShoppingBag } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,21 +36,31 @@ export default function LoginPage() {
 
       const user = response.user;
 
+      // Get user profile to check role and status
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Profile fetch error:", profileError);
+        // Continue with login even if profile fetch fails
+      }
+
       toast({
         title: "Welcome back!",
         description: "You have successfully logged in.",
       });
 
-      // Redirect based on role with timeout to ensure state updates
+      // Redirect based on role
       setTimeout(() => {
-        if (user.role === "admin") {
+        const userRole = profile?.role || user.user_metadata?.role || "customer";
+        
+        if (userRole === "admin") {
           router.push("/admin");
-        } else if (user.role === "vendor") {
-          if (user.status === "pending") {
-            router.push("/seller/pending-approval");
-          } else {
-            router.push("/seller");
-          }
+        } else if (userRole === "vendor") {
+          router.push("/seller");
         } else {
           router.push("/account/dashboard");
         }
@@ -61,6 +72,7 @@ export default function LoginPage() {
         description: error?.message || "Invalid email or password",
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
     }
   };
