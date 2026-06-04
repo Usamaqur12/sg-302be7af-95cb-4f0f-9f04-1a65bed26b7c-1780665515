@@ -3,16 +3,16 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
+import { CustomerLayout } from "@/components/CustomerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, Store } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Eye, EyeOff, Loader2, ShoppingBag } from "lucide-react";
 
-export default function SellerLoginPage() {
+export default function LoginPage() {
   const router = useRouter();
   const { signIn } = useAuthContext();
   const { toast } = useToast();
@@ -29,31 +29,26 @@ export default function SellerLoginPage() {
     try {
       const { user } = await signIn(email, password);
 
-      // Fetch user profile to verify role
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role, status")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      if (profile.role !== "vendor") {
-        await supabase.auth.signOut();
-        toast({
-          title: "Access Denied",
-          description: "This account is not registered as a seller",
-          variant: "destructive",
-        });
-        return;
-      }
-
       toast({
         title: "Welcome back!",
         description: "You have successfully logged in.",
       });
 
-      router.push("/seller");
+      // Fetch user profile to determine role
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      // Redirect based on role
+      if (profile?.role === "admin") {
+        router.push("/admin");
+      } else if (profile?.role === "vendor") {
+        router.push("/seller");
+      } else {
+        router.push("/account");
+      }
     } catch (error: any) {
       toast({
         title: "Login Failed",
@@ -66,15 +61,15 @@ export default function SellerLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-accent/5 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <CustomerLayout>
+      <div className="container max-w-md py-16">
         <Card>
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <Store className="h-12 w-12 text-primary" />
+              <ShoppingBag className="h-12 w-12 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-bold">Seller Login</CardTitle>
-            <CardDescription>Log in to your seller dashboard</CardDescription>
+            <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
+            <CardDescription>Log in to your customer account</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -83,7 +78,7 @@ export default function SellerLoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="seller@example.com"
+                  placeholder="customer@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -119,39 +114,49 @@ export default function SellerLoginPage() {
 
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Log In as Seller
+                Log In
               </Button>
 
               <div className="text-center text-sm text-muted-foreground">
-                Don't have a seller account?{" "}
-                <Link href="/seller/register" className="text-primary hover:underline font-medium">
-                  Register as seller
+                Don't have an account?{" "}
+                <Link href="/register" className="text-primary hover:underline font-medium">
+                  Sign up
                 </Link>
               </div>
 
-              <div className="text-center text-sm">
-                <Link href="/login" className="text-muted-foreground hover:text-foreground">
-                  ← Back to customer login
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Other Login Options
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Link href="/seller/login">
+                  <Button variant="outline" type="button" className="w-full">
+                    Seller Login
+                  </Button>
+                </Link>
+                <Link href="/admin/login">
+                  <Button variant="outline" type="button" className="w-full">
+                    Admin Login
+                  </Button>
                 </Link>
               </div>
 
               <div className="bg-muted/50 p-4 rounded-lg text-xs space-y-2">
-                <p className="font-semibold">Demo Seller Accounts:</p>
-                <div>
-                  <p className="font-medium">Approved Seller:</p>
-                  <p>Email: seller@marketplace.com</p>
-                  <p>Password: Seller@123</p>
-                </div>
-                <div className="mt-2">
-                  <p className="font-medium">Pending Seller:</p>
-                  <p>Email: pending@marketplace.com</p>
-                  <p>Password: Seller@123</p>
-                </div>
+                <p className="font-semibold">Demo Customer Account:</p>
+                <p>Email: customer@marketplace.com</p>
+                <p>Password: Customer@123</p>
               </div>
             </form>
           </CardContent>
         </Card>
       </div>
-    </div>
+    </CustomerLayout>
   );
 }

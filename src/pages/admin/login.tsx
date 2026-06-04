@@ -9,10 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, Store } from "lucide-react";
+import { Eye, EyeOff, Loader2, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-export default function SellerLoginPage() {
+export default function AdminLoginPage() {
   const router = useRouter();
   const { signIn } = useAuthContext();
   const { toast } = useToast();
@@ -32,32 +32,32 @@ export default function SellerLoginPage() {
       // Fetch user profile to verify role
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("role, status")
+        .select("role")
         .eq("id", user.id)
         .single();
 
       if (profileError) throw profileError;
 
-      if (profile.role !== "vendor") {
+      if (profile.role !== "admin") {
         await supabase.auth.signOut();
         toast({
           title: "Access Denied",
-          description: "This account is not registered as a seller",
+          description: "This account does not have admin privileges",
           variant: "destructive",
         });
         return;
       }
 
       toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
+        title: "Admin Access Granted",
+        description: "Welcome to the admin dashboard.",
       });
 
-      router.push("/seller");
+      router.push("/admin");
     } catch (error: any) {
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid email or password",
+        description: error.message || "Invalid credentials",
         variant: "destructive",
       });
     } finally {
@@ -66,24 +66,24 @@ export default function SellerLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-accent/5 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Card>
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <Store className="h-12 w-12 text-primary" />
+              <Shield className="h-12 w-12 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-bold">Seller Login</CardTitle>
-            <CardDescription>Log in to your seller dashboard</CardDescription>
+            <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
+            <CardDescription>Access the admin dashboard</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Admin Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="seller@example.com"
+                  placeholder="admin@marketplace.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -91,12 +91,12 @@ export default function SellerLoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Admin Password</Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
+                    placeholder="Enter admin password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -111,42 +111,21 @@ export default function SellerLoginPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-sm">
-                <Link href="/forgot-password" className="text-primary hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Log In as Seller
+                Log In as Admin
               </Button>
 
-              <div className="text-center text-sm text-muted-foreground">
-                Don't have a seller account?{" "}
-                <Link href="/seller/register" className="text-primary hover:underline font-medium">
-                  Register as seller
-                </Link>
-              </div>
-
               <div className="text-center text-sm">
-                <Link href="/login" className="text-muted-foreground hover:text-foreground">
-                  ← Back to customer login
+                <Link href="/" className="text-muted-foreground hover:text-foreground">
+                  ← Back to homepage
                 </Link>
               </div>
 
               <div className="bg-muted/50 p-4 rounded-lg text-xs space-y-2">
-                <p className="font-semibold">Demo Seller Accounts:</p>
-                <div>
-                  <p className="font-medium">Approved Seller:</p>
-                  <p>Email: seller@marketplace.com</p>
-                  <p>Password: Seller@123</p>
-                </div>
-                <div className="mt-2">
-                  <p className="font-medium">Pending Seller:</p>
-                  <p>Email: pending@marketplace.com</p>
-                  <p>Password: Seller@123</p>
-                </div>
+                <p className="font-semibold">Demo Admin Account:</p>
+                <p>Email: admin@marketplace.com</p>
+                <p>Password: Admin@123</p>
               </div>
             </form>
           </CardContent>
