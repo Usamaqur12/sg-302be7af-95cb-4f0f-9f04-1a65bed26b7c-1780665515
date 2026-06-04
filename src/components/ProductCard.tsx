@@ -19,6 +19,7 @@ interface ProductCardProps {
   rating: number;
   reviewCount: number;
   sellerName: string;
+  onAddToCart?: () => void;
 }
 
 export function ProductCard({
@@ -30,6 +31,7 @@ export function ProductCard({
   rating,
   reviewCount,
   sellerName,
+  onAddToCart,
 }: ProductCardProps) {
   const { addToCart } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
@@ -46,6 +48,7 @@ export function ProductCard({
       title: "Added to Cart",
       description: `${title} has been added to your cart`,
     });
+    onAddToCart?.();
   };
 
   const handleWishlistToggle = async (e: React.MouseEvent) => {
