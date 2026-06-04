@@ -52,11 +52,14 @@ export function useAuth() {
 
       if (error) throw error;
 
+      // Map 'seller' to 'vendor' for consistency
+      const role = data.role === "seller" ? "vendor" : (data.role as "customer" | "vendor" | "admin");
+
       setProfile({
         id: data.id,
         email: data.email,
         full_name: data.full_name || "",
-        role: data.role || "customer",
+        role: role || "customer",
         phone: data.phone,
       });
     } catch (error) {
