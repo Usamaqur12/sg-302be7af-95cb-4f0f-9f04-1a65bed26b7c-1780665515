@@ -509,10 +509,11 @@ export default function ProductDetailPage() {
                 id={relatedProduct.id}
                 title={relatedProduct.title}
                 price={relatedProduct.salePrice || relatedProduct.price}
+                compareAtPrice={relatedProduct.salePrice ? relatedProduct.price : undefined}
                 image={relatedProduct.images[0]?.url}
                 rating={relatedProduct.rating}
-                totalReviews={relatedProduct.totalReviews}
-                category={relatedProduct.category.name}
+                reviewCount={relatedProduct.totalReviews}
+                sellerName={relatedProduct.seller.business_name}
               />
             ))}
           </div>
