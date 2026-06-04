@@ -17,7 +17,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string, fullName: string, role?: string) => Promise<any>;
+  signUp: (email: string, password: string, fullName: string, role?: "customer" | "vendor" | "admin") => Promise<any>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;

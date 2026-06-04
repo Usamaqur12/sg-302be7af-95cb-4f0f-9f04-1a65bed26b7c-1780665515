@@ -1,93 +1,22 @@
+"use client";
+
 import { AdminLayout } from "@/components/AdminLayout";
+import { RoleGuard } from "@/components/RoleGuard";
 import { Card } from "@/components/ui/card";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
-import { Users, Store, Package, ShoppingCart, DollarSign, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Store, Package, ShoppingCart, DollarSign, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
+import Link from "next/link";
 
-interface Stats {
-  totalUsers: number;
-  totalSellers: number;
-  totalProducts: number;
-  totalOrders: number;
-  totalRevenue: number;
-  pendingWithdrawals: number;
-}
-
-export default function AdminDashboard() {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
-  const [stats, setStats] = useState<Stats>({
-    totalUsers: 0,
-    totalSellers: 0,
-    totalProducts: 0,
-    totalOrders: 0,
-    totalRevenue: 0,
-    pendingWithdrawals: 0,
-  });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/");
-      return;
-    }
-
-    if (user) {
-      fetchStats();
-    }
-  }, [user, authLoading, router]);
-
-  const fetchStats = async () => {
-    const { count: usersCount } = await supabase
-      .from("profiles")
-      .select("*", { count: "exact", head: true });
-
-    const { count: sellersCount } = await supabase
-      .from("seller_profiles")
-      .select("*", { count: "exact", head: true });
-
-    const { count: productsCount } = await supabase
-      .from("products")
-      .select("*", { count: "exact", head: true });
-
-    const { count: ordersCount } = await supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true });
-
-    const { data: ordersData } = await supabase
-      .from("orders")
-      .select("total");
-
-    const totalRevenue = ordersData?.reduce((sum, order) => sum + order.total, 0) || 0;
-
-    const { count: pendingWithdrawals } = await supabase
-      .from("withdrawal_requests")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending");
-
-    setStats({
-      totalUsers: usersCount || 0,
-      totalSellers: sellersCount || 0,
-      totalProducts: productsCount || 0,
-      totalOrders: ordersCount || 0,
-      totalRevenue,
-      pendingWithdrawals: pendingWithdrawals || 0,
-    });
-
-    setLoading(false);
+export default function AdminDashboardPage() {
+  // Mock admin dashboard data
+  const stats = {
+    totalUsers: 2847,
+    totalSellers: 156,
+    totalProducts: 1243,
+    totalOrders: 5632,
+    totalRevenue: 284750.50,
+    pendingWithdrawals: 12,
   };
-
-  if (authLoading || loading) {
-    return (
-      <AdminLayout>
-        <div className="text-center py-16">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </AdminLayout>
-    );
-  }
 
   const statCards = [
     {
@@ -116,7 +45,7 @@ export default function AdminDashboard() {
     },
     {
       title: "Total Revenue",
-      value: `$${stats.totalRevenue.toFixed(2)}`,
+      value: `$${stats.totalRevenue.toLocaleString()}`,
       icon: DollarSign,
       color: "text-green-600",
     },
@@ -124,53 +53,122 @@ export default function AdminDashboard() {
       title: "Pending Withdrawals",
       value: stats.pendingWithdrawals,
       icon: TrendingUp,
-      color: "text-warning",
+      color: "text-amber-500",
     },
   ];
 
   return (
-    <AdminLayout>
-      <div>
-        <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
+    <RoleGuard allowedRoles={["admin"]}>
+      <AdminLayout>
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-3xl font-bold font-serif mb-2">Admin Dashboard</h1>
+            <p className="text-muted-foreground">Manage your marketplace platform</p>
+          </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {statCards.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={stat.title} className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-                    <p className="text-2xl font-bold font-mono">{stat.value}</p>
+          {/* Stats Grid */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {statCards.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <Card key={stat.title} className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
+                      <p className="text-2xl font-bold font-mono">{stat.value}</p>
+                    </div>
+                    <Icon className={`h-8 w-8 ${stat.color}`} />
                   </div>
-                  <Icon className={`h-8 w-8 ${stat.color}`} />
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Quick Actions Grid */}
+          <div className="grid lg:grid-cols-2 gap-8">
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                Pending Actions
+              </h2>
+              <div className="space-y-3">
+                <div className="p-4 border rounded-lg hover:bg-muted/50 transition">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium">Pending Seller Approvals</p>
+                    <span className="text-sm text-muted-foreground">8 pending</span>
+                  </div>
+                  <Button size="sm" asChild>
+                    <Link href="/admin/sellers">Review Sellers</Link>
+                  </Button>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
+                <div className="p-4 border rounded-lg hover:bg-muted/50 transition">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium">Product Moderation</p>
+                    <span className="text-sm text-muted-foreground">23 pending</span>
+                  </div>
+                  <Button size="sm" asChild>
+                    <Link href="/admin/products">Review Products</Link>
+                  </Button>
+                </div>
+                <div className="p-4 border rounded-lg hover:bg-muted/50 transition">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium">Withdrawal Requests</p>
+                    <span className="text-sm text-muted-foreground">{stats.pendingWithdrawals} pending</span>
+                  </div>
+                  <Button size="sm" asChild>
+                    <Link href="/admin/payouts">Process Payouts</Link>
+                  </Button>
+                </div>
+              </div>
+            </Card>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-            <p className="text-muted-foreground">Activity feed coming soon</p>
-          </Card>
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                Quick Actions
+              </h2>
+              <div className="space-y-3">
+                <Button variant="outline" className="w-full justify-start" asChild>
+                  <Link href="/admin/users">
+                    <Users className="h-4 w-4 mr-2" />
+                    Manage Users
+                  </Link>
+                </Button>
+                <Button variant="outline" className="w-full justify-start" asChild>
+                  <Link href="/admin/sellers">
+                    <Store className="h-4 w-4 mr-2" />
+                    Manage Sellers
+                  </Link>
+                </Button>
+                <Button variant="outline" className="w-full justify-start" asChild>
+                  <Link href="/admin/products">
+                    <Package className="h-4 w-4 mr-2" />
+                    Manage Products
+                  </Link>
+                </Button>
+                <Button variant="outline" className="w-full justify-start" asChild>
+                  <Link href="/admin/orders">
+                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    View All Orders
+                  </Link>
+                </Button>
+              </div>
+            </Card>
+          </div>
 
+          {/* Recent Activity */}
           <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-            <div className="space-y-3">
-              <button className="w-full p-4 border border-border rounded-lg hover:border-accent transition-colors text-left">
-                <p className="font-medium">Approve Pending Sellers</p>
-                <p className="text-sm text-muted-foreground">Review seller verifications</p>
-              </button>
-              <button className="w-full p-4 border border-border rounded-lg hover:border-accent transition-colors text-left">
-                <p className="font-medium">Moderate Products</p>
-                <p className="text-sm text-muted-foreground">Approve or reject product listings</p>
-              </button>
+            <h2 className="text-xl font-semibold mb-4">Recent Platform Activity</h2>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>• New seller "TechGear Store" registered (Pending approval)</p>
+              <p>• Product "Wireless Earbuds Pro" approved by moderator</p>
+              <p>• Withdrawal request #WD-2026-0045 processed ($1,250.00)</p>
+              <p>• 23 new orders placed today</p>
+              <p>• Support ticket #T-89234 resolved</p>
             </div>
           </Card>
         </div>
-      </div>
-    </AdminLayout>
+      </AdminLayout>
+    </RoleGuard>
   );
 }

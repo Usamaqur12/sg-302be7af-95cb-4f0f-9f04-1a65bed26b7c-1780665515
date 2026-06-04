@@ -5,7 +5,8 @@ import { RoleGuard } from "@/components/RoleGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Package, ShoppingCart, TrendingUp, Eye, Clock } from "lucide-react";
+import { DollarSign, Package, ShoppingCart, TrendingUp, Eye, Clock, ArrowUpRight, ArrowDownRight, ShoppingBag, Star } from "lucide-react";
+import { useAuthContext } from "@/contexts/AuthContext";
 import Link from "next/link";
 
 // Mock seller dashboard data
@@ -91,7 +92,7 @@ const MOCK_DASHBOARD_DATA = {
 };
 
 export default function SellerDashboardPage() {
-  const { user } = useAuth();
+  const { user } = useAuthContext();
 
   const { stats, recentOrders, topProducts } = MOCK_DASHBOARD_DATA;
 
