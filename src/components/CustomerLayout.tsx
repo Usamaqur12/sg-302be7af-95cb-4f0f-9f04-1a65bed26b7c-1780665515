@@ -27,7 +27,7 @@ interface CustomerLayoutProps {
 export function CustomerLayout({ children }: CustomerLayoutProps) {
   const router = useRouter();
   const { items } = useCart();
-  const { user, signOut } = useAuthContext();
+  const { user, profile, signOut } = useAuthContext();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
@@ -56,7 +56,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
               {user ? (
                 <>
                   <span className="text-muted-foreground hidden sm:inline">
-                    Hi, {user.full_name || user.email}
+                    Hi, {profile?.full_name || user.email}
                   </span>
                   <button
                     onClick={handleLogout}
@@ -151,7 +151,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
             <div className="flex items-center gap-2 ml-auto">
               {user ? (
                 <>
-                  {user.role === "admin" && (
+                  {profile?.role === "admin" && (
                     <Button variant="ghost" size="sm" asChild className="hidden lg:flex">
                       <Link href="/admin">
                         <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -159,7 +159,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
                       </Link>
                     </Button>
                   )}
-                  {user.role === "vendor" && (
+                  {profile?.role === "seller" && (
                     <Button variant="ghost" size="sm" asChild className="hidden lg:flex">
                       <Link href="/seller">
                         <Package className="mr-2 h-4 w-4" />
