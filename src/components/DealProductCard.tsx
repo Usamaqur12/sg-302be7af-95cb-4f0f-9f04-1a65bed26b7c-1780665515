@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Star, Heart, ShoppingCart } from "lucide-react";
 import { CountdownTimer } from "./CountdownTimer";
 import { useState } from "react";
+import { useCart } from "@/contexts/CartContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface DealProductCardProps {
   id: string;
@@ -20,6 +22,7 @@ interface DealProductCardProps {
   reviews: number;
   seller: string;
   endDate: Date;
+  onAddToCart?: () => void;
 }
 
 export function DealProductCard({
@@ -33,8 +36,21 @@ export function DealProductCard({
   reviews,
   seller,
   endDate,
+  onAddToCart,
 }: DealProductCardProps) {
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const { addToCart } = useCart();
+  const { toast } = useToast();
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await addToCart(id, 1);
+    toast({
+      title: "Added to Cart",
+      description: `${title} has been added to your cart`,
+    });
+    onAddToCart?.();
+  };
 
   return (
     <Card className="group relative h-full bg-white hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden flex flex-col">
@@ -123,10 +139,7 @@ export function DealProductCard({
           <Button 
             size="sm" 
             className="w-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-accent hover:bg-accent/90 text-white font-semibold gap-2"
-            onClick={(e) => {
-              e.preventDefault();
-              // Add to cart logic here
-            }}
+            onClick={handleAddToCart}
           >
             <ShoppingCart className="h-4 w-4" />
             Add to Cart
