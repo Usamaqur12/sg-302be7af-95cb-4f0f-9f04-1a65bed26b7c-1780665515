@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { CategoryCard } from "@/components/CategoryCard";
@@ -28,211 +28,157 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-
-const featuredCategories = [
-  {
-    id: "1",
-    name: "Electronics",
-    slug: "electronics",
-    image: "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800&h=800&fit=crop",
-    productCount: 1243,
-  },
-  {
-    id: "2",
-    name: "Fashion",
-    slug: "fashion",
-    image: "https://images.unsplash.com/photo-1445205170230-053b83016050?w=800&h=800&fit=crop",
-    productCount: 2156,
-  },
-  {
-    id: "3",
-    name: "Home & Garden",
-    slug: "home-garden",
-    image: "https://images.unsplash.com/photo-1556912173-46c336c7fd55?w=800&h=800&fit=crop",
-    productCount: 876,
-  },
-  {
-    id: "4",
-    name: "Sports & Outdoors",
-    slug: "sports-outdoors",
-    image: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&h=800&fit=crop",
-    productCount: 654,
-  },
-  {
-    id: "5",
-    name: "Books & Media",
-    slug: "books-media",
-    image: "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=800&h=800&fit=crop",
-    productCount: 923,
-  },
-  {
-    id: "6",
-    name: "Toys & Kids",
-    slug: "toys-kids",
-    image: "https://images.unsplash.com/photo-1560582861-45078880e48e?w=800&h=800&fit=crop",
-    productCount: 445,
-  },
-];
-
-const bestSellers = [
-  {
-    id: "1",
-    title: "Wireless Noise Cancelling Headphones",
-    price: 199.99,
-    compareAtPrice: 299.99,
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop",
-    rating: 4.8,
-    reviewCount: 1234,
-    sellerName: "TechPro Store",
-  },
-  {
-    id: "2",
-    title: "Smart Watch Series 7",
-    price: 349.99,
-    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&h=600&fit=crop",
-    rating: 4.6,
-    reviewCount: 892,
-    sellerName: "Wearable Tech",
-  },
-  {
-    id: "3",
-    title: "Professional DSLR Camera",
-    price: 1299.99,
-    compareAtPrice: 1599.99,
-    image: "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&h=600&fit=crop",
-    rating: 4.9,
-    reviewCount: 567,
-    sellerName: "Photo Masters",
-  },
-  {
-    id: "4",
-    title: "Gaming Laptop RTX 4070",
-    price: 1899.99,
-    image: "https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=600&h=600&fit=crop",
-    rating: 4.7,
-    reviewCount: 432,
-    sellerName: "Gaming Gear",
-  },
-];
-
-const flashDeals = [
-  {
-    id: "5",
-    title: "Ergonomic Office Chair",
-    price: 299.99,
-    compareAtPrice: 499.99,
-    image: "https://images.unsplash.com/photo-1580480055273-228ff5388ef8?w=600&h=600&fit=crop",
-    rating: 4.5,
-    reviewCount: 321,
-    sellerName: "Office Plus",
-  },
-  {
-    id: "6",
-    title: "4K Ultra HD Smart TV 55\"",
-    price: 599.99,
-    compareAtPrice: 899.99,
-    image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=600&h=600&fit=crop",
-    rating: 4.7,
-    reviewCount: 789,
-    sellerName: "Home Electronics",
-  },
-  {
-    id: "7",
-    title: "Bluetooth Speaker Waterproof",
-    price: 79.99,
-    compareAtPrice: 129.99,
-    image: "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&h=600&fit=crop",
-    rating: 4.4,
-    reviewCount: 1456,
-    sellerName: "Sound Solutions",
-  },
-  {
-    id: "8",
-    title: "Mechanical Gaming Keyboard RGB",
-    price: 149.99,
-    compareAtPrice: 229.99,
-    image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&h=600&fit=crop",
-    rating: 4.8,
-    reviewCount: 654,
-    sellerName: "Gaming Gear",
-  },
-];
-
-const newArrivals = [
-  {
-    id: "9",
-    title: "Premium Leather Wallet",
-    price: 89.99,
-    image: "https://images.unsplash.com/photo-1627123424574-724758594e93?w=600&h=600&fit=crop",
-    rating: 4.7,
-    reviewCount: 89,
-    sellerName: "Leather Crafts",
-  },
-  {
-    id: "10",
-    title: "Stainless Steel Water Bottle",
-    price: 29.99,
-    image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=600&h=600&fit=crop",
-    rating: 4.8,
-    reviewCount: 234,
-    sellerName: "EcoLife",
-  },
-  {
-    id: "11",
-    title: "Wireless Charging Pad",
-    price: 39.99,
-    image: "https://images.unsplash.com/photo-1591290619762-92b9ad6d1ca6?w=600&h=600&fit=crop",
-    rating: 4.5,
-    reviewCount: 156,
-    sellerName: "TechPro Store",
-  },
-  {
-    id: "12",
-    title: "Designer Sunglasses",
-    price: 149.99,
-    image: "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=600&h=600&fit=crop",
-    rating: 4.6,
-    reviewCount: 78,
-    sellerName: "Fashion Hub",
-  },
-];
-
-const featuredVendors = [
-  {
-    id: "1",
-    name: "TechPro Store",
-    logo: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200&h=200&fit=crop",
-    rating: 4.9,
-    products: 342,
-    verified: true,
-  },
-  {
-    id: "2",
-    name: "Fashion Hub",
-    logo: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop",
-    rating: 4.8,
-    products: 567,
-    verified: true,
-  },
-  {
-    id: "3",
-    name: "Home Essentials",
-    logo: "https://images.unsplash.com/photo-1484101403633-562f891dc89a?w=200&h=200&fit=crop",
-    rating: 4.7,
-    products: 289,
-    verified: true,
-  },
-  {
-    id: "4",
-    name: "Gaming Gear",
-    logo: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=200&h=200&fit=crop",
-    rating: 4.9,
-    products: 421,
-    verified: true,
-  },
-];
+import { supabase } from "@/integrations/supabase/client";
 
 export default function HomePage() {
+  const [featuredCategories, setFeaturedCategories] = useState<any[]>([]);
+  const [bestSellers, setBestSellers] = useState<any[]>([]);
+  const [flashDeals, setFlashDeals] = useState<any[]>([]);
+  const [newArrivals, setNewArrivals] = useState<any[]>([]);
+  const [featuredVendors, setFeaturedVendors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchHomepageData();
+  }, []);
+
+  const fetchHomepageData = async () => {
+    try {
+      // Fetch featured categories
+      const { data: categoriesData } = await supabase
+        .from("categories")
+        .select("id, name, slug, image_url")
+        .limit(6);
+
+      if (categoriesData) {
+        setFeaturedCategories(categoriesData.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          slug: cat.slug,
+          image: cat.image_url || "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800&h=800&fit=crop",
+          productCount: 0,
+        })));
+      }
+
+      // Fetch best sellers (by rating and total_reviews)
+      const { data: bestSellersData } = await supabase
+        .from("products")
+        .select(`
+          id,
+          title,
+          price,
+          compare_at_price,
+          rating,
+          total_reviews,
+          images:product_images(url),
+          seller:seller_profiles!seller_id(id, business_name)
+        `)
+        .eq("status", "approved")
+        .order("total_reviews", { ascending: false })
+        .limit(4);
+
+      if (bestSellersData) {
+        setBestSellers(bestSellersData.map(p => ({
+          id: p.id,
+          title: p.title,
+          price: p.price,
+          compareAtPrice: p.compare_at_price,
+          image: (p.images as any)?.[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop",
+          rating: p.rating,
+          reviewCount: p.total_reviews,
+          sellerName: (p.seller as any)?.business_name || "Unknown Seller",
+          sellerId: (p.seller as any)?.id,
+        })));
+      }
+
+      // Fetch flash deals (is_deal=true and deal not expired)
+      const { data: flashDealsData } = await supabase
+        .from("products")
+        .select(`
+          id,
+          title,
+          price,
+          compare_at_price,
+          rating,
+          total_reviews,
+          images:product_images(url),
+          seller:seller_profiles!seller_id(id, business_name)
+        `)
+        .eq("status", "approved")
+        .eq("is_deal", true)
+        .gte("deal_expires_at", new Date().toISOString())
+        .limit(4);
+
+      if (flashDealsData) {
+        setFlashDeals(flashDealsData.map(p => ({
+          id: p.id,
+          title: p.title,
+          price: p.price,
+          compareAtPrice: p.compare_at_price,
+          image: (p.images as any)?.[0]?.url || "https://images.unsplash.com/photo-1580480055273-228ff5388ef8?w=600&h=600&fit=crop",
+          rating: p.rating,
+          reviewCount: p.total_reviews,
+          sellerName: (p.seller as any)?.business_name || "Unknown Seller",
+          sellerId: (p.seller as any)?.id,
+        })));
+      }
+
+      // Fetch new arrivals (recent products)
+      const { data: newArrivalsData } = await supabase
+        .from("products")
+        .select(`
+          id,
+          title,
+          price,
+          compare_at_price,
+          rating,
+          total_reviews,
+          images:product_images(url),
+          seller:seller_profiles!seller_id(id, business_name)
+        `)
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .limit(4);
+
+      if (newArrivalsData) {
+        setNewArrivals(newArrivalsData.map(p => ({
+          id: p.id,
+          title: p.title,
+          price: p.price,
+          compareAtPrice: p.compare_at_price,
+          image: (p.images as any)?.[0]?.url || "https://images.unsplash.com/photo-1627123424574-724758594e93?w=600&h=600&fit=crop",
+          rating: p.rating,
+          reviewCount: p.total_reviews,
+          sellerName: (p.seller as any)?.business_name || "Unknown Seller",
+          sellerId: (p.seller as any)?.id,
+        })));
+      }
+
+      // Fetch featured vendors (verified sellers)
+      const { data: vendorsData } = await supabase
+        .from("seller_profiles")
+        .select("id, business_name, logo_url, average_rating")
+        .eq("status", "approved")
+        .not("verified_at", "is", null)
+        .limit(4);
+
+      if (vendorsData) {
+        setFeaturedVendors(vendorsData.map(v => ({
+          id: v.id,
+          name: v.business_name,
+          logo: v.logo_url || "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200&h=200&fit=crop",
+          rating: v.average_rating || 4.5,
+          products: 0,
+          verified: true,
+        })));
+      }
+    } catch (error) {
+      console.error("Error fetching homepage data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <CustomerLayout>
       {/* Hero Section */}

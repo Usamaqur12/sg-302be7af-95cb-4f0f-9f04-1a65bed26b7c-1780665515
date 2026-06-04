@@ -142,31 +142,34 @@ export default function CategoryDetailPage() {
     if (!slug || typeof slug !== 'string') return;
 
     async function fetchCategory() {
+      setLoading(true);
       try {
-        // Try to fetch real data with timeout
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), 3000)
-        );
-
-        const categoryPromise = supabase
+        // Fetch category by slug
+        const { data: categoryData, error: categoryError } = await supabase
           .from("categories")
-          .select("*, products(count)")
+          .select("*")
           .eq("slug", slug as string)
           .single();
 
-        const { data: categoryData, error } = await Promise.race([
-          categoryPromise,
-          timeoutPromise,
-        ]) as any;
-
-        if (error || !categoryData) {
-          throw new Error('Category not found');
+        if (categoryError || !categoryData) {
+          console.error("Category not found:", categoryError);
+          setCategory(null);
+          setProducts([]);
+          setLoading(false);
+          return;
         }
 
-        setCategory(categoryData);
+        setCategory({
+          id: categoryData.id,
+          name: categoryData.name,
+          slug: categoryData.slug,
+          description: categoryData.description || `Discover the latest in ${categoryData.name}.`,
+          image_url: categoryData.image_url || "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1200",
+          product_count: 0,
+        });
 
-        // Fetch products
-        const { data: productsData } = await supabase
+        // Fetch products in this category (approved only)
+        const { data: productsData, error: productsError } = await supabase
           .from("products")
           .select(`
             id,
@@ -176,19 +179,35 @@ export default function CategoryDetailPage() {
             rating,
             total_reviews,
             images:product_images(url),
-            seller:seller_profiles(business_name)
+            seller:seller_profiles!seller_id(id, business_name)
           `)
           .eq("category_id", categoryData.id)
           .eq("status", "approved")
-          .limit(12);
+          .limit(24);
 
-        setProducts(productsData || MOCK_PRODUCTS);
+        if (productsError) {
+          console.error("Error fetching products:", productsError);
+        }
+
+        const formattedProducts = (productsData || []).map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          price: p.price,
+          compare_at_price: p.compare_at_price,
+          rating: p.rating || 4.5,
+          total_reviews: p.total_reviews || 0,
+          images: p.images || [],
+          seller: p.seller,
+        }));
+
+        setProducts(formattedProducts);
+        
+        // Update category product count
+        setCategory(prev => prev ? { ...prev, product_count: formattedProducts.length } : null);
       } catch (error) {
-        // Use mock data on error or timeout
-        console.log("Using mock category data");
-        const mockCategory = MOCK_CATEGORIES[slug as string] || MOCK_CATEGORIES.electronics;
-        setCategory(mockCategory);
-        setProducts(MOCK_PRODUCTS);
+        console.error("Error fetching category:", error);
+        setCategory(null);
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -308,10 +327,11 @@ export default function CategoryDetailPage() {
                 title={product.title}
                 price={product.price}
                 compareAtPrice={product.compare_at_price}
-                image={product.images?.[0]?.url || ""}
+                image={product.images?.[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}
                 rating={product.rating}
                 reviewCount={product.total_reviews}
-                sellerName={product.seller?.business_name || ""}
+                sellerName={product.seller?.business_name || "Unknown Seller"}
+                sellerId={product.seller?.id}
               />
             ))}
           </div>
