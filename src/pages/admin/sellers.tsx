@@ -54,31 +54,18 @@ export default function AdminSellersPage() {
 
   const handleApproveSeller = async (sellerId: string, sellerName: string) => {
     try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ verification_status: "approved", verified_at: new Date().toISOString() })
-        .eq("id", sellerId);
-
-      if (error) throw error;
-
-      // Create notification for seller
-      const seller = sellers.find((s) => s.id === sellerId);
-      if (seller) {
-        await supabase.from("notifications").insert({
-          user_id: seller.user_id,
-          title: "Seller Application Approved!",
-          message: "Congratulations! Your seller application has been approved. You can now start selling.",
-          type: "seller_approved",
-          is_read: false,
-        });
-      }
-
+      // Note: verification_status and notifications require Phase 2 migration
       toast({
-        title: "Seller Approved",
-        description: `${sellerName} has been approved as a seller`,
+        title: "Feature Coming Soon",
+        description: "Seller approval system will be available after Phase 2 database migration is complete.",
       });
 
-      loadSellers();
+      // TODO: Uncomment after Phase 2 migration
+      // const { error } = await supabase
+      //   .from("seller_profiles")
+      //   .update({ verification_status: "approved", verified_at: new Date().toISOString() })
+      //   .eq("id", sellerId);
+      // if (error) throw error;
     } catch (error: any) {
       toast({
         title: "Action Failed",
@@ -90,31 +77,10 @@ export default function AdminSellersPage() {
 
   const handleRejectSeller = async (sellerId: string, sellerName: string) => {
     try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ verification_status: "rejected" })
-        .eq("id", sellerId);
-
-      if (error) throw error;
-
-      // Create notification for seller
-      const seller = sellers.find((s) => s.id === sellerId);
-      if (seller) {
-        await supabase.from("notifications").insert({
-          user_id: seller.user_id,
-          title: "Seller Application Rejected",
-          message: "Unfortunately, your seller application has been rejected. Please contact support for more information.",
-          type: "seller_rejected",
-          is_read: false,
-        });
-      }
-
       toast({
-        title: "Seller Rejected",
-        description: `${sellerName} application has been rejected`,
+        title: "Feature Coming Soon",
+        description: "Seller rejection system will be available after Phase 2 database migration is complete.",
       });
-
-      loadSellers();
     } catch (error: any) {
       toast({
         title: "Action Failed",
@@ -126,19 +92,10 @@ export default function AdminSellersPage() {
 
   const handleSuspendSeller = async (sellerId: string, sellerName: string) => {
     try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ is_active: false })
-        .eq("id", sellerId);
-
-      if (error) throw error;
-
       toast({
-        title: "Seller Suspended",
-        description: `${sellerName} has been suspended`,
+        title: "Feature Coming Soon",
+        description: "Seller suspension system will be available after Phase 2 database migration is complete.",
       });
-
-      loadSellers();
     } catch (error: any) {
       toast({
         title: "Action Failed",
@@ -150,19 +107,10 @@ export default function AdminSellersPage() {
 
   const handleActivateSeller = async (sellerId: string, sellerName: string) => {
     try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ is_active: true })
-        .eq("id", sellerId);
-
-      if (error) throw error;
-
       toast({
-        title: "Seller Activated",
-        description: `${sellerName} has been activated`,
+        title: "Feature Coming Soon",
+        description: "Seller activation system will be available after Phase 2 database migration is complete.",
       });
-
-      loadSellers();
     } catch (error: any) {
       toast({
         title: "Action Failed",
@@ -177,16 +125,17 @@ export default function AdminSellersPage() {
       seller.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       seller.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesFilter = filter === "all" || seller.verification_status === filter;
+    // Note: Filter by verification_status will work after Phase 2 migration
+    const matchesFilter = filter === "all"; // || seller.verification_status === filter;
 
     return matchesSearch && matchesFilter;
   });
 
   const statusCounts = {
     all: sellers.length,
-    pending: sellers.filter((s) => s.verification_status === "pending").length,
-    approved: sellers.filter((s) => s.verification_status === "approved").length,
-    rejected: sellers.filter((s) => s.verification_status === "rejected").length,
+    pending: 0, // sellers.filter((s) => s.verification_status === "pending").length,
+    approved: 0, // sellers.filter((s) => s.verification_status === "approved").length,
+    rejected: 0, // sellers.filter((s) => s.verification_status === "rejected").length,
   };
 
   return (
@@ -243,26 +192,10 @@ export default function AdminSellersPage() {
                               {seller.profiles?.email} • {seller.profiles?.full_name}
                             </p>
                             <div className="flex items-center gap-2 mb-2">
-                              <Badge
-                                variant={
-                                  seller.verification_status === "approved"
-                                    ? "default"
-                                    : seller.verification_status === "pending"
-                                    ? "secondary"
-                                    : "destructive"
-                                }
-                              >
-                                {seller.verification_status === "approved" && <CheckCircle className="h-3 w-3 mr-1" />}
-                                {seller.verification_status === "pending" && <Clock className="h-3 w-3 mr-1" />}
-                                {seller.verification_status === "rejected" && <XCircle className="h-3 w-3 mr-1" />}
-                                {seller.verification_status}
+                              <Badge variant="secondary">
+                                <Clock className="h-3 w-3 mr-1" />
+                                Pending Migration
                               </Badge>
-                              {!seller.is_active && (
-                                <Badge variant="destructive">
-                                  <Ban className="h-3 w-3 mr-1" />
-                                  Suspended
-                                </Badge>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -270,11 +203,11 @@ export default function AdminSellersPage() {
                         <div className="grid md:grid-cols-2 gap-4 text-sm">
                           <div>
                             <p className="text-muted-foreground">Business Type</p>
-                            <p className="font-medium capitalize">{seller.business_type}</p>
+                            <p className="font-medium capitalize">{seller.business_type || "Not specified"}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">Commission Rate</p>
-                            <p className="font-medium">{seller.commission_rate}%</p>
+                            <p className="font-medium">{seller.commission_rate || 12}%</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">Registered</p>
@@ -286,71 +219,36 @@ export default function AdminSellersPage() {
                               })}
                             </p>
                           </div>
-                          {seller.verified_at && (
-                            <div>
-                              <p className="text-muted-foreground">Verified</p>
-                              <p className="font-medium">
-                                {new Date(seller.verified_at).toLocaleDateString("en-US", {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                })}
-                              </p>
-                            </div>
-                          )}
                         </div>
 
                         <div>
                           <p className="text-sm text-muted-foreground mb-1">Description</p>
-                          <p className="text-sm">{seller.description || "No description provided"}</p>
+                          <p className="text-sm">{seller.business_description || seller.description || "No description provided"}</p>
                         </div>
 
                         <div>
                           <p className="text-sm text-muted-foreground mb-1">Business Address</p>
-                          <p className="text-sm">{seller.business_address}</p>
+                          <p className="text-sm">{seller.business_address || "No address provided"}</p>
                         </div>
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        {seller.verification_status === "pending" && (
-                          <>
-                            <Button
-                              onClick={() => handleApproveSeller(seller.id, seller.business_name)}
-                              className="gap-2"
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                              Approve
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              onClick={() => handleRejectSeller(seller.id, seller.business_name)}
-                              className="gap-2"
-                            >
-                              <XCircle className="h-4 w-4" />
-                              Reject
-                            </Button>
-                          </>
-                        )}
-
-                        {seller.verification_status === "approved" && (
-                          <>
-                            {seller.is_active ? (
-                              <Button
-                                variant="destructive"
-                                onClick={() => handleSuspendSeller(seller.id, seller.business_name)}
-                                className="gap-2"
-                              >
-                                <Ban className="h-4 w-4" />
-                                Suspend
-                              </Button>
-                            ) : (
-                              <Button onClick={() => handleActivateSeller(seller.id, seller.business_name)} className="gap-2">
-                                <CheckCircle className="h-4 w-4" />
-                                Activate
-                              </Button>
-                            )}
-                          </>
-                        )}
+                        <Button
+                          onClick={() => handleApproveSeller(seller.id, seller.business_name)}
+                          className="gap-2"
+                          variant="outline"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Approve (Coming Soon)
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleRejectSeller(seller.id, seller.business_name)}
+                          className="gap-2"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          Reject (Coming Soon)
+                        </Button>
 
                         <Button variant="outline" className="gap-2">
                           <Eye className="h-4 w-4" />

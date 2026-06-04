@@ -96,13 +96,13 @@ export default function SellerRegisterPage() {
       }
 
       // 2. Create seller profile with pending status
+      // Note: verification_status column will be available after Phase 2 migration
       const { error: profileError } = await supabase.from("seller_profiles").insert({
         user_id: authData.user.id,
         business_name: formData.shopName,
-        description: formData.shopDescription,
+        business_description: formData.shopDescription,
         business_type: formData.businessType,
         business_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
-        verification_status: "pending",
         commission_rate: 12, // Default commission rate
         bank_account_number: formData.bankAccountNumber,
         bank_name: formData.bankName,
@@ -111,27 +111,11 @@ export default function SellerRegisterPage() {
 
       if (profileError) throw profileError;
 
-      // 3. Create notification for admins
-      const { data: admins } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "admin");
-
-      if (admins && admins.length > 0) {
-        const notifications = admins.map((admin) => ({
-          user_id: admin.id,
-          title: "New Seller Application",
-          message: `${formData.fullName} has applied to become a seller. Business: ${formData.shopName}`,
-          type: "seller_application",
-          is_read: false,
-        }));
-
-        await supabase.from("notifications").insert(notifications);
-      }
+      // Note: Admin notifications will be enabled after Phase 2 migration adds notifications table
 
       toast({
         title: "Application Submitted!",
-        description: "Your seller application is under review. We'll notify you within 24-48 hours.",
+        description: "Your seller application has been created. Please wait for admin approval.",
       });
 
       // Sign out the new user and redirect to login

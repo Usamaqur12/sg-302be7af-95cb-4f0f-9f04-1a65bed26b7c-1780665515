@@ -141,21 +141,19 @@ export default function AccountDashboardPage() {
     setSaving(true);
 
     try {
-      const fullAddress = `${shippingAddress.street}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.zipCode}, ${shippingAddress.country}`;
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          address: fullAddress,
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
+      // Note: Address storage requires Phase 2 migration to add address column to profiles table
       toast({
-        title: "Address Updated",
-        description: "Your shipping address has been saved successfully.",
+        title: "Feature Coming Soon",
+        description: "Address storage will be available after database migration is complete.",
       });
+
+      // TODO: Uncomment after Phase 2 migration is applied
+      // const fullAddress = `${shippingAddress.street}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.zipCode}, ${shippingAddress.country}`;
+      // const { error } = await supabase
+      //   .from("profiles")
+      //   .update({ address: fullAddress })
+      //   .eq("id", user.id);
+      // if (error) throw error;
     } catch (error: any) {
       toast({
         title: "Update Failed",
