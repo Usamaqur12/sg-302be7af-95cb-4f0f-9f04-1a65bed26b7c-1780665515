@@ -169,7 +169,7 @@ export default function CheckoutPage() {
         .insert({
           customer_id: user.id,
           order_number: orderNumber,
-          order_status: "pending",
+          status: "pending",
           payment_status: "paid",
           payment_method: paymentMethod,
           subtotal_amount: subtotal,
@@ -199,7 +199,7 @@ export default function CheckoutPage() {
         quantity: item.quantity,
         price: item.product.price,
         subtotal: item.product.price * item.quantity,
-        seller_id: item.product.seller_id || "default-seller-id",
+        seller_id: (item.product as any).seller_id || "00000000-0000-0000-0000-000000000000",
         commission_rate: 0.15,
         commission_amount: (item.product.price * item.quantity) * 0.15,
         seller_earnings: (item.product.price * item.quantity) * 0.85,
