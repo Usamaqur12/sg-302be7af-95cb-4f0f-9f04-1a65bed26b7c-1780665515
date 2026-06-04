@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, Store } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function SellerLoginPage() {
   const router = useRouter();
@@ -27,22 +26,16 @@ export default function SellerLoginPage() {
     setLoading(true);
 
     try {
-      const { user } = await signIn(email, password);
+      const response = await signIn(email, password);
 
-      // Fetch user profile to verify role
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
+      if (!response.success || !response.user) {
+        throw new Error(response.message || "Login failed");
+      }
 
-      if (profileError) throw profileError;
+      const user = response.user;
 
-      // Map 'seller' to 'vendor' for consistency
-      const mappedRole = profile.role === "seller" ? "vendor" : profile.role;
-
-      if (mappedRole !== "vendor") {
-        await supabase.auth.signOut();
+      // Check if user is a vendor
+      if (user.role !== "vendor") {
         toast({
           title: "Access Denied",
           description: "This account is not registered as a seller",
@@ -56,7 +49,18 @@ export default function SellerLoginPage() {
         description: "You have successfully logged in.",
       });
 
-      router.push("/seller");
+      // Check seller status
+      if (user.status === "pending") {
+        router.push("/seller/pending-approval");
+      } else if (user.status === "suspended") {
+        toast({
+          title: "Account Suspended",
+          description: "Your seller account has been suspended. Contact support for assistance.",
+          variant: "destructive",
+        });
+      } else {
+        router.push("/seller");
+      }
     } catch (error: any) {
       toast({
         title: "Login Failed",

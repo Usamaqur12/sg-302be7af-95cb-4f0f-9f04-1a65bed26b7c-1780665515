@@ -11,7 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ShoppingBag } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,19 +27,13 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { user } = await signIn(email, password);
+      const response = await signIn(email, password);
 
-      // Fetch user profile to check role
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
+      if (!response.success || !response.user) {
+        throw new Error(response.message || "Login failed");
+      }
 
-      if (profileError) throw profileError;
-
-      // Map 'seller' to 'vendor' for consistency
-      const mappedRole = profile.role === "seller" ? "vendor" : profile.role;
+      const user = response.user;
 
       toast({
         title: "Welcome back!",
@@ -48,10 +41,15 @@ export default function LoginPage() {
       });
 
       // Redirect based on role
-      if (mappedRole === "admin") {
+      if (user.role === "admin") {
         router.push("/admin");
-      } else if (mappedRole === "vendor") {
-        router.push("/seller");
+      } else if (user.role === "vendor") {
+        // Check status for vendor
+        if (user.status === "pending") {
+          router.push("/seller/pending-approval");
+        } else {
+          router.push("/seller");
+        }
       } else {
         router.push("/account/dashboard");
       }
