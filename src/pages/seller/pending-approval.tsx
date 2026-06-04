@@ -3,7 +3,7 @@
 import { SellerLayout } from "@/components/SellerLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RoleGuard } from "@/components/RoleGuard";
-import { Clock, Mail, Phone } from "lucide-react";
+import { Clock, Mail, Phone, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 

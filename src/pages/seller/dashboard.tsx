@@ -10,6 +10,17 @@ import { DollarSign, Package, ShoppingCart, TrendingUp, Eye, Clock, ArrowUpRight
 import { useAuthContext } from "@/contexts/AuthContext";
 import Link from "next/link";
 
+interface SellerStats {
+  totalSales: number;
+  salesGrowth: number;
+  totalOrders: number;
+  ordersGrowth: number;
+  totalProducts: number;
+  productsGrowth: number;
+  pendingEarnings: number;
+  earningsGrowth: number;
+}
+
 // Mock seller dashboard data
 const MOCK_DASHBOARD_DATA = {
   stats: {
@@ -104,34 +115,9 @@ export default function SellerDashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      // Mock data for now
-      setStats({
-        totalRevenue: 45230.5,
-        totalOrders: 156,
-        totalProducts: 24,
-        pendingOrders: 8,
-        revenueChange: 12.5,
-        ordersChange: 8.3,
-      });
-
-      setRecentOrders([
-        {
-          id: "1",
-          orderNumber: "ORD-2024-001",
-          customer: "John Doe",
-          total: 299.99,
-          status: "pending",
-          date: "2024-01-15",
-        },
-        {
-          id: "2",
-          orderNumber: "ORD-2024-002",
-          customer: "Jane Smith",
-          total: 149.5,
-          status: "processing",
-          date: "2024-01-14",
-        },
-      ]);
+      // Use mock data
+      setStats(MOCK_DASHBOARD_DATA.stats);
+      setRecentOrders(MOCK_DASHBOARD_DATA.recentOrders);
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
     } finally {
@@ -277,7 +263,7 @@ export default function SellerDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {topProducts.map((product, idx) => (
+                {MOCK_DASHBOARD_DATA.topProducts.map((product, idx) => (
                   <div key={product.id} className="flex items-center gap-4 p-4 border rounded-lg">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold">
                       {idx + 1}

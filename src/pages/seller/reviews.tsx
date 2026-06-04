@@ -7,6 +7,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, ThumbsUp, MessageCircle, TrendingUp } from "lucide-react";
 
+interface Review {
+  id: string;
+  customer: string;
+  product: string;
+  rating: number;
+  comment: string;
+  date: string;
+  helpful?: number;
+}
+
 export default function SellerReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);

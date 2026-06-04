@@ -9,6 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Clock, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
+interface Payout {
+  id: string;
+  amount: number;
+  status: string;
+  date: string;
+  method: string;
+  reference?: string;
+}
+
 export default function SellerPayoutsPage() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
