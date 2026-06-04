@@ -1,241 +1,176 @@
 "use client";
 
 import { CustomerLayout } from "@/components/CustomerLayout";
-import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { ProductCard } from "@/components/ProductCard";
 import { ReviewForm } from "@/components/ReviewForm";
 import { ReviewList } from "@/components/ReviewList";
-import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/contexts/CartContext";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import Image from "next/image";
-import { Star, ShoppingCart, Heart, Package, Shield, TruckIcon, Store, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
-import { analytics } from "@/lib/analytics";
+import { 
+  Star, Heart, ShoppingCart, TruckIcon, Package, 
+  ShieldCheck, RefreshCcw, Share2, Minus, Plus, Store, ChevronLeft
+} from "lucide-react";
 
-// Mock data fallback
-const MOCK_PRODUCT = {
-  id: "mock-1",
-  title: "Premium Wireless Headphones",
-  description: "Experience superior sound quality with our premium wireless headphones. Featuring active noise cancellation, 30-hour battery life, and comfortable over-ear design.",
-  price: 199.99,
-  compare_at_price: 299.99,
-  stock_quantity: 50,
-  sku: "WH-1000XM4",
-  rating: 4.8,
-  total_reviews: 1247,
-  images: [
-    { id: "1", url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800", display_order: 0 },
-    { id: "2", url: "https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800", display_order: 1 },
-    { id: "3", url: "https://images.unsplash.com/photo-1545127398-14699f92334b?w=800", display_order: 2 },
-  ],
-  category: { id: "electronics", name: "Electronics", slug: "electronics" },
-  seller: { id: "seller-1", business_name: "TechWorld Store", rating: 4.9, total_reviews: 3421 },
-  specifications: {
-    "Brand": "AudioMax",
-    "Model": "WH-1000XM4",
-    "Connectivity": "Bluetooth 5.0",
-    "Battery Life": "30 hours",
-    "Noise Cancellation": "Active ANC",
-    "Weight": "254g",
+// Mock product data
+const MOCK_PRODUCTS: Record<string, any> = {
+  "1": {
+    id: "1",
+    title: "Premium Wireless Headphones",
+    slug: "premium-wireless-headphones",
+    description: "Experience studio-quality sound with our premium wireless headphones. Featuring active noise cancellation, 30-hour battery life, and premium leather cushions for all-day comfort.",
+    price: 299.99,
+    salePrice: 249.99,
+    images: [
+      { url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800" },
+      { url: "https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800" },
+      { url: "https://images.unsplash.com/photo-1524678606370-a47ad25cb82a?w=800" },
+    ],
+    rating: 4.8,
+    totalReviews: 248,
+    stock: 42,
+    category: { name: "Electronics", slug: "electronics" },
+    seller: {
+      id: "seller-1",
+      business_name: "AudioTech Store",
+      rating: 4.9,
+      total_products: 156,
+    },
+    specifications: {
+      "Brand": "AudioTech",
+      "Model": "AT-PRO500",
+      "Battery Life": "30 hours",
+      "Noise Cancellation": "Active ANC",
+      "Connectivity": "Bluetooth 5.2, 3.5mm AUX",
+      "Weight": "250g",
+      "Warranty": "2 Years",
+    },
+  },
+  "2": {
+    id: "2",
+    title: "Smart Watch Series X",
+    slug: "smart-watch-series-x",
+    description: "Stay connected and healthy with our latest smartwatch. Track your fitness, monitor your heart rate, receive notifications, and enjoy a stunning AMOLED display with customizable watch faces.",
+    price: 399.99,
+    salePrice: 349.99,
+    images: [
+      { url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800" },
+      { url: "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=800" },
+    ],
+    rating: 4.6,
+    totalReviews: 182,
+    stock: 28,
+    category: { name: "Wearables", slug: "wearables" },
+    seller: {
+      id: "seller-2",
+      business_name: "TechGear Plus",
+      rating: 4.7,
+      total_products: 89,
+    },
+    specifications: {
+      "Display": "1.4\" AMOLED",
+      "Battery": "Up to 7 days",
+      "Water Resistance": "5ATM (50m)",
+      "Sensors": "Heart rate, GPS, Accelerometer",
+      "Compatibility": "iOS & Android",
+      "Warranty": "1 Year",
+    },
   },
 };
 
-const MOCK_RELATED = [
-  {
-    id: "related-1",
-    title: "Portable Bluetooth Speaker",
-    price: 79.99,
-    compare_at_price: 99.99,
-    rating: 4.6,
-    total_reviews: 892,
-    images: [{ url: "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400" }],
-    seller: { business_name: "AudioHub" },
-  },
-  {
-    id: "related-2",
-    title: "USB-C Charging Cable",
-    price: 19.99,
-    rating: 4.4,
-    total_reviews: 567,
-    images: [{ url: "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=400" }],
-    seller: { business_name: "TechAccessories" },
-  },
-  {
-    id: "related-3",
-    title: "Wireless Earbuds Pro",
-    price: 149.99,
-    compare_at_price: 199.99,
-    rating: 4.7,
-    total_reviews: 1034,
-    images: [{ url: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400" }],
-    seller: { business_name: "AudioMax" },
-  },
-  {
-    id: "related-4",
-    title: "Premium Headphone Case",
-    price: 29.99,
-    rating: 4.5,
-    total_reviews: 423,
-    images: [{ url: "https://images.unsplash.com/photo-1625948515291-69613efd103f?w=400" }],
-    seller: { business_name: "TechWorld Store" },
-  },
-];
-
-interface ProductDetail {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  compare_at_price: number | null;
-  stock_quantity: number;
-  sku: string;
-  rating: number;
-  total_reviews: number;
-  images: { id: string; url: string; display_order: number }[];
-  category: { id: string; name: string; slug: string };
-  seller: { id: string; business_name: string; rating: number; total_reviews: number };
-  specifications?: Record<string, string>;
-}
-
 export default function ProductDetailPage() {
-  const { user } = useAuth();
+  const router = useRouter();
+  const { id } = router.query;
   const { addToCart } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const { toast } = useToast();
-  const router = useRouter();
-  const { id } = router.query;
 
-  const [product, setProduct] = useState<ProductDetail | null>(null);
-  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
-  const [selectedImage, setSelectedImage] = useState(0);
-  const [quantity, setQuantity] = useState(1);
+  const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [reviewRefreshTrigger, setReviewRefreshTrigger] = useState(0);
+  const [quantity, setQuantity] = useState(1);
+  const [selectedImage, setSelectedImage] = useState(0);
 
   useEffect(() => {
-    if (!id || typeof id !== 'string') return;
+    if (!id) return;
 
-    async function fetchProduct() {
-      try {
-        // Try to fetch real data with timeout
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), 3000)
-        );
-
-        const dataPromise = supabase
-          .from("products")
-          .select(`
-            *,
-            images:product_images(id, url, display_order),
-            category:categories(id, name, slug),
-            seller:seller_profiles(id, business_name, rating, total_reviews)
-          `)
-          .eq("id", id as string)
-          .eq("status", "approved")
-          .single();
-
-        const { data: productData, error } = await Promise.race([
-          dataPromise,
-          timeoutPromise,
-        ]) as any;
-
-        if (error || !productData) {
-          throw new Error('Product not found');
-        }
-
-        setProduct(productData as any);
-
-        // Track product view
-        analytics.productViewed({
-          id: productData.id,
-          name: productData.title,
-          price: productData.price,
-          category: productData.category?.name,
-          seller: productData.seller?.business_name,
-        });
-
-        // Fetch related products
-        const { data: relatedData } = await supabase
-          .from("products")
-          .select(`
-            id,
-            title,
-            price,
-            compare_at_price,
-            rating,
-            total_reviews,
-            images:product_images(url),
-            seller:seller_profiles(business_name)
-          `)
-          .eq("category_id", productData.category.id)
-          .eq("status", "approved")
-          .neq("id", id as string)
-          .limit(4);
-
-        setRelatedProducts(relatedData || MOCK_RELATED);
-      } catch (error) {
-        // Use mock data on error or timeout
-        console.log("Using mock product data");
-        setProduct(MOCK_PRODUCT);
-        setRelatedProducts(MOCK_RELATED);
-      } finally {
+    // Simulate API call with instant mock data
+    const loadProduct = () => {
+      setLoading(true);
+      
+      // Use mock data
+      const mockProduct = MOCK_PRODUCTS[id as string] || MOCK_PRODUCTS["1"];
+      
+      setTimeout(() => {
+        setProduct(mockProduct);
         setLoading(false);
-      }
-    }
+      }, 100);
+    };
 
-    fetchProduct();
+    loadProduct();
   }, [id]);
 
-  const handleAddToCart = async () => {
+  const handleAddToCart = () => {
     if (!product) return;
 
-    await addToCart(product.id, quantity);
+    addToCart({
+      id: `cart-${product.id}`,
+      product_id: product.id,
+      quantity,
+      product: {
+        id: product.id,
+        title: product.title,
+        price: product.salePrice || product.price,
+        images: product.images,
+        slug: product.slug,
+      },
+    });
+
     toast({
       title: "Added to Cart",
-      description: `${quantity} × ${product.title} added to your cart`,
-    });
-
-    // Track add to cart
-    analytics.addToCart({
-      id: product.id,
-      name: product.title,
-      price: product.price,
-      quantity,
+      description: `${quantity}x ${product.title} added to your cart.`,
     });
   };
 
-  const handleWishlistToggle = async () => {
+  const handleToggleWishlist = () => {
     if (!product) return;
-    await toggleWishlist(product.id, product.title, product.price);
+    toggleWishlist(product.id);
   };
 
-  const handleReviewSubmitted = () => {
-    setReviewRefreshTrigger((prev) => prev + 1);
+  const incrementQuantity = () => {
+    if (quantity < (product?.stock || 99)) {
+      setQuantity(quantity + 1);
+    }
   };
 
-  const discount = product?.compare_at_price
-    ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100)
-    : 0;
-
-  const inWishlist = product ? isInWishlist(product.id) : false;
+  const decrementQuantity = () => {
+    if (quantity > 1) {
+      setQuantity(quantity - 1);
+    }
+  };
 
   if (loading) {
     return (
       <CustomerLayout>
-        <div className="container py-16 text-center">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/2 mx-auto"></div>
-            <div className="h-4 bg-muted rounded w-1/3 mx-auto"></div>
+        <div className="container py-16">
+          <div className="animate-pulse space-y-8">
+            <div className="h-8 w-48 bg-muted rounded"/>
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="aspect-square bg-muted rounded-lg"/>
+              <div className="space-y-4">
+                <div className="h-8 w-3/4 bg-muted rounded"/>
+                <div className="h-6 w-1/2 bg-muted rounded"/>
+                <div className="h-24 bg-muted rounded"/>
+              </div>
+            </div>
           </div>
         </div>
       </CustomerLayout>
@@ -246,62 +181,72 @@ export default function ProductDetailPage() {
     return (
       <CustomerLayout>
         <div className="container py-16 text-center">
-          <h1 className="text-2xl font-bold mb-4">Product Not Found</h1>
-          <p className="text-muted-foreground mb-6">The product you're looking for doesn't exist or has been removed.</p>
-          <Button onClick={() => router.push("/")}>Back to Home</Button>
+          <Package className="h-16 w-16 mx-auto text-muted-foreground mb-4"/>
+          <h2 className="text-2xl font-bold mb-2">Product Not Found</h2>
+          <p className="text-muted-foreground mb-8">The product you're looking for doesn't exist.</p>
+          <Button asChild>
+            <Link href="/">Back to Home</Link>
+          </Button>
         </div>
       </CustomerLayout>
     );
   }
 
+  const discount = product.salePrice 
+    ? Math.round(((product.price - product.salePrice) / product.price) * 100)
+    : 0;
+
+  const relatedProducts = Object.values(MOCK_PRODUCTS).filter(p => p.id !== product.id).slice(0, 4);
+
   return (
     <CustomerLayout>
       <div className="container py-8">
         {/* Breadcrumb */}
-        <Breadcrumb className="mb-6">
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="/">Home</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbLink href={`/categories/${product.category.slug}`}>
-                {product.category.name}
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbPage>{product.title}</BreadcrumbPage>
-          </BreadcrumbList>
-        </Breadcrumb>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
+          <Link href="/" className="hover:text-foreground">Home</Link>
+          <span>/</span>
+          <Link href="/categories" className="hover:text-foreground">Categories</Link>
+          <span>/</span>
+          <Link href={`/categories/${product.category.slug}`} className="hover:text-foreground">
+            {product.category.name}
+          </Link>
+          <span>/</span>
+          <span className="text-foreground">{product.title}</span>
+        </div>
 
-        {/* Product Details */}
-        <div className="grid md:grid-cols-2 gap-8 mb-12">
+        <Button variant="ghost" size="sm" className="mb-4" onClick={() => router.back()}>
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Back
+        </Button>
+
+        {/* Product Main Section */}
+        <div className="grid lg:grid-cols-2 gap-12 mb-16">
           {/* Image Gallery */}
-          <div>
-            <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-4">
+          <div className="space-y-4">
+            <div className="relative aspect-square rounded-xl overflow-hidden bg-muted border">
               <Image
-                src={product.images[selectedImage]?.url || product.images[0]?.url}
+                src={product.images[selectedImage]?.url || "/placeholder.png"}
                 alt={product.title}
                 fill
                 className="object-cover"
                 priority
               />
               {discount > 0 && (
-                <Badge className="absolute top-4 right-4 bg-destructive text-destructive-foreground">
+                <Badge className="absolute top-4 left-4 bg-destructive text-destructive-foreground">
                   -{discount}% OFF
                 </Badge>
               )}
             </div>
 
-            {/* Thumbnails */}
+            {/* Thumbnail Gallery */}
             {product.images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto">
-                {product.images.map((img, idx) => (
+              <div className="grid grid-cols-4 gap-2">
+                {product.images.map((img: any, idx: number) => (
                   <button
-                    key={img.id}
+                    key={idx}
                     onClick={() => setSelectedImage(idx)}
-                    className={`relative w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
-                      selectedImage === idx ? "border-primary" : "border-transparent"
+                    className={`relative aspect-square rounded-lg overflow-hidden border-2 transition ${
+                      selectedImage === idx ? "border-primary" : "border-transparent hover:border-muted-foreground/50"
                     }`}
                   >
                     <Image src={img.url} alt={`View ${idx + 1}`} fill className="object-cover" />
@@ -312,192 +257,257 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Product Info */}
-          <div>
-            <Link
-              href={`/sellers/${product.seller.id}`}
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-accent mb-2"
-            >
-              <Store className="h-4 w-4" />
-              {product.seller.business_name}
-            </Link>
-
-            <h1 className="text-3xl font-bold mb-4">{product.title}</h1>
-
-            {/* Rating */}
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex items-center gap-2">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`h-5 w-5 ${
-                      i < Math.floor(product.rating)
-                        ? "fill-warning text-warning"
-                        : "text-muted-foreground"
-                    }`}
-                  />
-                ))}
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Link href={`/sellers/${product.seller.id}`} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+                  <Store className="h-3.5 w-3.5" />
+                  {product.seller.business_name}
+                </Link>
+                <span className="text-muted-foreground">•</span>
+                <div className="flex items-center gap-1 text-sm">
+                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  <span className="font-medium">{product.seller.rating}</span>
+                </div>
               </div>
-              <span className="text-sm text-muted-foreground">
-                {product.rating} ({product.total_reviews} reviews)
-              </span>
+
+              <h1 className="text-3xl font-bold font-serif mb-3">{product.title}</h1>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`h-4 w-4 ${
+                        i < Math.floor(product.rating)
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-sm font-medium">{product.rating}</span>
+                <span className="text-sm text-muted-foreground">({product.totalReviews} reviews)</span>
+              </div>
             </div>
 
-            {/* Price */}
-            <div className="flex items-baseline gap-3 mb-6">
-              <span className="text-4xl font-bold font-mono">${product.price.toFixed(2)}</span>
-              {product.compare_at_price && (
-                <span className="text-xl text-muted-foreground line-through font-mono">
-                  ${product.compare_at_price.toFixed(2)}
+            <Separator />
+
+            {/* Pricing */}
+            <div className="space-y-2">
+              <div className="flex items-baseline gap-3">
+                <span className="text-4xl font-bold font-mono text-destructive">
+                  ${(product.salePrice || product.price).toFixed(2)}
                 </span>
+                {product.salePrice && (
+                  <>
+                    <span className="text-xl text-muted-foreground line-through font-mono">
+                      ${product.price.toFixed(2)}
+                    </span>
+                    <Badge variant="destructive">Save {discount}%</Badge>
+                  </>
+                )}
+              </div>
+              {product.stock > 0 && product.stock < 10 && (
+                <p className="text-sm text-amber-600 font-medium">
+                  Only {product.stock} left in stock - order soon!
+                </p>
               )}
             </div>
 
-            {/* Stock Status */}
-            <div className="mb-6">
-              {product.stock_quantity > 0 ? (
-                <Badge variant="secondary" className="gap-2">
-                  <Package className="h-4 w-4" />
-                  In Stock ({product.stock_quantity} available)
-                </Badge>
-              ) : (
-                <Badge variant="destructive">Out of Stock</Badge>
-              )}
-            </div>
+            <Separator />
 
-            {/* Quantity Selector */}
-            <div className="mb-6">
-              <label className="text-sm font-medium mb-2 block">Quantity</label>
-              <div className="flex items-center gap-3">
+            {/* Quantity & Actions */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium">Quantity:</span>
+                <div className="flex items-center border rounded-lg">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={decrementQuantity}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <span className="px-6 py-2 font-mono font-medium">{quantity}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={incrementQuantity}
+                    disabled={quantity >= (product.stock || 99)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                {product.stock > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    {product.stock} available
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-3">
                 <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={quantity <= 1}
+                  size="lg"
+                  className="flex-1"
+                  onClick={handleAddToCart}
+                  disabled={product.stock === 0}
                 >
-                  <Minus className="h-4 w-4" />
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  {product.stock > 0 ? "Add to Cart" : "Out of Stock"}
                 </Button>
-                <span className="text-lg font-mono font-medium w-12 text-center">{quantity}</span>
                 <Button
+                  size="lg"
                   variant="outline"
-                  size="icon"
-                  onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
-                  disabled={quantity >= product.stock_quantity}
+                  onClick={handleToggleWishlist}
                 >
-                  <Plus className="h-4 w-4" />
+                  <Heart className={`h-5 w-5 ${isInWishlist(product.id) ? "fill-destructive text-destructive" : ""}`} />
+                </Button>
+                <Button size="lg" variant="outline">
+                  <Share2 className="h-5 w-5" />
                 </Button>
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-4 mb-6">
-              <Button
-                size="lg"
-                className="flex-1"
-                onClick={handleAddToCart}
-                disabled={product.stock_quantity === 0}
-              >
-                <ShoppingCart className="mr-2 h-5 w-5" />
-                Add to Cart
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={handleWishlistToggle}
-              >
-                <Heart className={`h-5 w-5 ${inWishlist ? "fill-destructive text-destructive" : ""}`} />
+              <Button variant="outline" size="lg" className="w-full" asChild>
+                <Link href="/checkout">
+                  Buy Now
+                </Link>
               </Button>
             </div>
 
-            {/* Trust Badges */}
-            <div className="grid grid-cols-3 gap-4">
-              <Card className="p-4 text-center">
-                <Shield className="h-6 w-6 mx-auto mb-2 text-primary" />
-                <p className="text-xs text-muted-foreground">Buyer Protection</p>
-              </Card>
-              <Card className="p-4 text-center">
-                <TruckIcon className="h-6 w-6 mx-auto mb-2 text-primary" />
-                <p className="text-xs text-muted-foreground">Free Shipping</p>
-              </Card>
-              <Card className="p-4 text-center">
-                <Package className="h-6 w-6 mx-auto mb-2 text-primary" />
-                <p className="text-xs text-muted-foreground">Easy Returns</p>
-              </Card>
-            </div>
+            {/* Features */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-start gap-3">
+                    <TruckIcon className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Free Shipping</p>
+                      <p className="text-xs text-muted-foreground">On orders over $50</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <RefreshCcw className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Easy Returns</p>
+                      <p className="text-xs text-muted-foreground">30-day return policy</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Secure Payment</p>
+                      <p className="text-xs text-muted-foreground">100% secure checkout</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Package className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Warranty</p>
+                      <p className="text-xs text-muted-foreground">
+                        {product.specifications?.Warranty || "1 Year"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
         {/* Product Details Tabs */}
-        <Tabs defaultValue="description" className="mb-12">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="description">Description</TabsTrigger>
-            <TabsTrigger value="specifications">Specifications</TabsTrigger>
-            <TabsTrigger value="reviews">Reviews ({product.total_reviews})</TabsTrigger>
-          </TabsList>
+        <Card className="mb-16">
+          <Tabs defaultValue="description" className="w-full">
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0">
+              <TabsTrigger value="description" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                Description
+              </TabsTrigger>
+              <TabsTrigger value="specifications" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                Specifications
+              </TabsTrigger>
+              <TabsTrigger value="shipping" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                Shipping & Returns
+              </TabsTrigger>
+              <TabsTrigger value="reviews" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                Reviews ({product.totalReviews})
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="description" className="mt-6">
-            <Card className="p-6">
-              <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                {product.description}
-              </p>
-            </Card>
-          </TabsContent>
+            <TabsContent value="description" className="p-6">
+              <div className="prose max-w-none">
+                <p className="text-muted-foreground leading-relaxed">{product.description}</p>
+                
+                <h3 className="mt-6 mb-3 font-semibold text-lg">Key Features:</h3>
+                <ul className="space-y-2 text-muted-foreground">
+                  <li>Premium build quality with attention to detail</li>
+                  <li>Latest technology for optimal performance</li>
+                  <li>Ergonomic design for comfort during extended use</li>
+                  <li>Compatible with multiple devices and platforms</li>
+                  <li>Energy efficient with long-lasting durability</li>
+                </ul>
+              </div>
+            </TabsContent>
 
-          <TabsContent value="specifications" className="mt-6">
-            <Card className="p-6">
-              <dl className="space-y-4">
-                {product.specifications && Object.entries(product.specifications).map(([key, value]) => (
-                  <div key={key} className="flex border-b pb-4 last:border-0">
-                    <dt className="font-medium w-1/3">{key}</dt>
-                    <dd className="text-muted-foreground w-2/3">{value}</dd>
+            <TabsContent value="specifications" className="p-6">
+              <div className="grid sm:grid-cols-2 gap-4">
+                {Object.entries(product.specifications).map(([key, value]) => (
+                  <div key={key} className="flex justify-between py-3 border-b">
+                    <span className="font-medium">{key}</span>
+                    <span className="text-muted-foreground">{value as string}</span>
                   </div>
                 ))}
-                <div className="flex border-b pb-4">
-                  <dt className="font-medium w-1/3">SKU</dt>
-                  <dd className="text-muted-foreground w-2/3 font-mono">{product.sku}</dd>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="shipping" className="p-6">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-semibold text-lg mb-3">Shipping Information</h3>
+                  <ul className="space-y-2 text-muted-foreground">
+                    <li>• Free standard shipping on orders over $50</li>
+                    <li>• Express shipping available at checkout</li>
+                    <li>• Estimated delivery: 3-5 business days</li>
+                    <li>• International shipping available to select countries</li>
+                    <li>• Track your order in real-time</li>
+                  </ul>
                 </div>
-              </dl>
-            </Card>
-          </TabsContent>
+                <Separator />
+                <div>
+                  <h3 className="font-semibold text-lg mb-3">Return Policy</h3>
+                  <ul className="space-y-2 text-muted-foreground">
+                    <li>• 30-day money-back guarantee</li>
+                    <li>• Free returns on all orders</li>
+                    <li>• Items must be unused and in original packaging</li>
+                    <li>• Refund processed within 5-7 business days</li>
+                    <li>• Contact support for return authorization</li>
+                  </ul>
+                </div>
+              </div>
+            </TabsContent>
 
-          <TabsContent value="reviews" className="mt-6">
-            <div className="space-y-8">
-              <ReviewForm
-                productId={product.id}
-                productTitle={product.title}
-                onReviewSubmitted={handleReviewSubmitted}
-              />
-
-              <Separator />
-
-              <ReviewList
-                productId={product.id}
-                refreshTrigger={reviewRefreshTrigger}
-              />
-            </div>
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="reviews" className="p-6">
+              <div className="space-y-8">
+                <ReviewList productId={product.id} />
+                <Separator />
+                <div>
+                  <h3 className="font-semibold text-lg mb-4">Write a Review</h3>
+                  <ReviewForm productId={product.id} />
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </Card>
 
         {/* Related Products */}
-        {relatedProducts.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-bold mb-6">Related Products</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {relatedProducts.map((relatedProduct) => (
-                <ProductCard
-                  key={relatedProduct.id}
-                  id={relatedProduct.id}
-                  title={relatedProduct.title}
-                  price={relatedProduct.price}
-                  compareAtPrice={relatedProduct.compare_at_price}
-                  image={relatedProduct.images?.[0]?.url || ""}
-                  rating={relatedProduct.rating}
-                  reviewCount={relatedProduct.total_reviews}
-                  sellerName={relatedProduct.seller?.business_name || ""}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        <div>
+          <h2 className="text-2xl font-bold font-serif mb-6">Related Products</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {relatedProducts.map((relatedProduct) => (
+              <ProductCard key={relatedProduct.id} product={relatedProduct} />
+            ))}
+          </div>
+        </div>
       </div>
     </CustomerLayout>
   );
