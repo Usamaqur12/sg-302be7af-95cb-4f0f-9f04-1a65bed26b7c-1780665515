@@ -38,7 +38,10 @@ export default function SellerLoginPage() {
 
       if (profileError) throw profileError;
 
-      if (profile.role !== "vendor") {
+      // Map 'seller' to 'vendor' for consistency
+      const mappedRole = profile.role === "seller" ? "vendor" : profile.role;
+
+      if (mappedRole !== "vendor") {
         await supabase.auth.signOut();
         toast({
           title: "Access Denied",

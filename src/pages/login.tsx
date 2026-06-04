@@ -30,25 +30,30 @@ export default function LoginPage() {
     try {
       const { user } = await signIn(email, password);
 
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
-      });
-
-      // Fetch user profile to determine role
-      const { data: profile } = await supabase
+      // Fetch user profile to check role
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", user.id)
         .single();
 
+      if (profileError) throw profileError;
+
+      // Map 'seller' to 'vendor' for consistency
+      const mappedRole = profile.role === "seller" ? "vendor" : profile.role;
+
+      toast({
+        title: "Welcome back!",
+        description: "You have successfully logged in.",
+      });
+
       // Redirect based on role
-      if (profile?.role === "admin") {
+      if (mappedRole === "admin") {
         router.push("/admin");
-      } else if (profile?.role === "vendor") {
+      } else if (mappedRole === "vendor") {
         router.push("/seller");
       } else {
-        router.push("/account");
+        router.push("/account/dashboard");
       }
     } catch (error: any) {
       toast({
