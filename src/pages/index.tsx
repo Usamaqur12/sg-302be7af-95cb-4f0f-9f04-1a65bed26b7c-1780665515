@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { CategoryCard } from "@/components/CategoryCard";
