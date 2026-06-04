@@ -17,6 +17,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, CheckCircle2, CreditCard, Package, TruckIcon } from "lucide-react";
 import { analytics } from "@/lib/analytics";
+import { supabase } from "@/integrations/supabase/client";
 
 type CheckoutStep = "shipping" | "payment" | "confirmation";
 
@@ -147,20 +148,72 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!validatePaymentForm()) return;
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to place an order.",
+      });
+      router.push("/login");
+      return;
+    }
 
     setProcessing(true);
 
     try {
-      // Simulate order processing
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Generate order number
+      const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-      // Generate mock order ID
-      const newOrderId = `ORD-2026-${Math.floor(Math.random() * 9000) + 1000}`;
-      setOrderId(newOrderId);
+      // Create order in Supabase
+      const { data: orderData, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          customer_id: user.id,
+          order_number: orderNumber,
+          order_status: "pending",
+          payment_status: "paid",
+          payment_method: paymentMethod,
+          subtotal_amount: subtotal,
+          shipping_cost: shipping,
+          tax_amount: tax,
+          total_amount: total,
+          shipping_full_name: shippingData.fullName,
+          shipping_email: shippingData.email,
+          shipping_phone: shippingData.phone,
+          shipping_street: shippingData.street,
+          shipping_city: shippingData.city,
+          shipping_state: shippingData.state,
+          shipping_postal_code: shippingData.zipCode,
+          shipping_country: shippingData.country,
+        })
+        .select()
+        .single();
 
-      // Track purchase
+      if (orderError) throw orderError;
+
+      // Create order items
+      const orderItems = items.map((item) => ({
+        order_id: orderData.id,
+        product_id: item.product.id,
+        product_title: item.product.title,
+        product_image: item.product.images?.[0]?.url || null,
+        quantity: item.quantity,
+        price: item.product.price,
+        subtotal: item.product.price * item.quantity,
+        seller_id: item.product.seller_id || "default-seller-id",
+        commission_rate: 0.15,
+        commission_amount: (item.product.price * item.quantity) * 0.15,
+        seller_earnings: (item.product.price * item.quantity) * 0.85,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from("order_items")
+        .insert(orderItems);
+
+      if (itemsError) throw itemsError;
+
+      // Track purchase analytics
       analytics.purchaseCompleted(
-        newOrderId,
+        orderNumber,
         total,
         items.map((item) => ({
           id: item.product.id,
@@ -173,15 +226,17 @@ export default function CheckoutPage() {
       // Clear cart
       clearCart();
 
-      // Move to confirmation
+      // Set order ID and move to confirmation
+      setOrderId(orderData.id);
       setCurrentStep("confirmation");
       window.scrollTo({ top: 0, behavior: "smooth" });
 
       toast({
         title: "Order Placed Successfully!",
-        description: `Your order ${newOrderId} has been confirmed.`,
+        description: `Your order ${orderNumber} has been confirmed.`,
       });
     } catch (error: any) {
+      console.error("Order creation error:", error);
       toast({
         title: "Order Failed",
         description: error.message || "Could not process your order. Please try again.",
@@ -511,9 +566,11 @@ export default function CheckoutPage() {
 
                   <h2 className="text-3xl font-bold mb-4">Order Confirmed!</h2>
                   <p className="text-muted-foreground mb-2">
-                    Thank you for your order. Your order number is:
+                    Thank you for your order. Your order has been successfully placed.
                   </p>
-                  <p className="text-2xl font-bold font-mono mb-6">{orderId}</p>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Order ID: <span className="font-mono font-semibold">{orderId}</span>
+                  </p>
 
                   <div className="bg-muted p-6 rounded-lg mb-6 text-left max-w-md mx-auto">
                     <p className="font-semibold mb-2">Order Details:</p>
@@ -527,7 +584,7 @@ export default function CheckoutPage() {
 
                   <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <Button asChild variant="outline">
-                      <Link href="/account/dashboard">View Order</Link>
+                      <Link href={`/orders/${orderId}`}>View Order Details</Link>
                     </Button>
                     <Button asChild>
                       <Link href="/">Continue Shopping</Link>
