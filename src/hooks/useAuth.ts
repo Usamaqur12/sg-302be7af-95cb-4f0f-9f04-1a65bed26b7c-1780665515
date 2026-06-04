@@ -1,117 +1,58 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { User } from "@supabase/supabase-js";
-
-interface UserProfile {
-  id: string;
-  email: string;
-  full_name: string;
-  role: "customer" | "vendor" | "admin";
-  phone?: string;
-}
+import { mockAuth, type MockUser } from "@/lib/mockAuth";
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<MockUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    // Check for existing session on mount
+    checkAuth();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-
-      if (error) throw error;
-
-      // Map 'seller' to 'vendor' for consistency
-      const role = data.role === "seller" ? "vendor" : (data.role as "customer" | "vendor" | "admin");
-
-      setProfile({
-        id: data.id,
-        email: data.email,
-        full_name: data.full_name || "",
-        role: role || "customer",
-        phone: data.phone,
-      });
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-    } finally {
-      setLoading(false);
-    }
+  const checkAuth = () => {
+    const currentUser = mockAuth.getCurrentUser();
+    setUser(currentUser);
+    setLoading(false);
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) throw error;
-    return data;
+    const response = mockAuth.login(email, password);
+    
+    if (response.success && response.user) {
+      setUser(response.user);
+      return response;
+    }
+    
+    throw new Error(response.message || "Login failed");
   };
 
-  const signUp = async (email: string, password: string, fullName: string, role: "customer" | "vendor" | "admin" = "customer") => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role,
-        },
-      },
-    });
-
-    if (error) throw error;
-    return data;
+  const signUp = async (email: string, password: string, fullName: string) => {
+    const response = mockAuth.register(email, password, fullName);
+    
+    if (response.success && response.user) {
+      setUser(response.user);
+      return response;
+    }
+    
+    throw new Error(response.message || "Registration failed");
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    mockAuth.logout();
     setUser(null);
-    setProfile(null);
   };
 
   return {
     user,
-    profile,
+    profile: user, // For compatibility with existing code
     loading,
     signIn,
     signUp,
     signOut,
-    isAuthenticated: !!user,
-    isAdmin: profile?.role === "admin",
-    isVendor: profile?.role === "vendor",
-    isCustomer: profile?.role === "customer",
+    isAuthenticated: mockAuth.isAuthenticated(),
+    isAdmin: user?.role === "admin",
+    isVendor: user?.role === "vendor",
+    isCustomer: user?.role === "customer",
   };
 }
