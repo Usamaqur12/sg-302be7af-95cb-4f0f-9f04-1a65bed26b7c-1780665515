@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { Store, Upload, Shield, CheckCircle2 } from "lucide-react";
+import { Store, Upload, Shield, CheckCircle2, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function SellerRegisterPage() {
   const { toast } = useToast();
@@ -34,6 +35,9 @@ export default function SellerRegisterPage() {
     state: "",
     zipCode: "",
     country: "",
+    bankAccountNumber: "",
+    bankName: "",
+    bankRoutingNumber: "",
   });
 
   const handleChange = (field: string, value: string) => {
@@ -61,17 +65,77 @@ export default function SellerRegisterPage() {
       return;
     }
 
+    if (formData.password.length < 6) {
+      toast({
+        title: "Weak Password",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // TODO: Integrate with Supabase seller registration
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // 1. Create auth user with vendor role
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
+            role: "vendor",
+          },
+        },
+      });
+
+      if (authError) throw authError;
+
+      if (!authData.user) {
+        throw new Error("User creation failed");
+      }
+
+      // 2. Create seller profile with pending status
+      const { error: profileError } = await supabase.from("seller_profiles").insert({
+        user_id: authData.user.id,
+        business_name: formData.shopName,
+        description: formData.shopDescription,
+        business_type: formData.businessType,
+        business_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
+        verification_status: "pending",
+        commission_rate: 12, // Default commission rate
+        bank_account_number: formData.bankAccountNumber,
+        bank_name: formData.bankName,
+        bank_routing_number: formData.bankRoutingNumber,
+      });
+
+      if (profileError) throw profileError;
+
+      // 3. Create notification for admins
+      const { data: admins } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "admin");
+
+      if (admins && admins.length > 0) {
+        const notifications = admins.map((admin) => ({
+          user_id: admin.id,
+          title: "New Seller Application",
+          message: `${formData.fullName} has applied to become a seller. Business: ${formData.shopName}`,
+          type: "seller_application",
+          is_read: false,
+        }));
+
+        await supabase.from("notifications").insert(notifications);
+      }
 
       toast({
         title: "Application Submitted!",
         description: "Your seller application is under review. We'll notify you within 24-48 hours.",
       });
 
+      // Sign out the new user and redirect to login
+      await supabase.auth.signOut();
       router.push("/seller/login");
     } catch (error: any) {
       toast({
@@ -105,7 +169,7 @@ export default function SellerRegisterPage() {
               <CardContent className="pt-6">
                 <CheckCircle2 className="h-8 w-8 text-accent mb-3" />
                 <h3 className="font-semibold mb-1">Low Commission</h3>
-                <p className="text-sm text-muted-foreground">Only 5-15% per sale</p>
+                <p className="text-sm text-muted-foreground">Starting at 12%</p>
               </CardContent>
             </Card>
             <Card>
@@ -205,19 +269,14 @@ export default function SellerRegisterPage() {
                   </div>
                   <div>
                     <Label htmlFor="businessType">Business Type *</Label>
-                    <Select
-                      value={formData.businessType}
-                      onValueChange={(value) => handleChange("businessType", value)}
-                    >
+                    <Select value={formData.businessType} onValueChange={(value) => handleChange("businessType", value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select business type" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="individual">Individual</SelectItem>
-                        <SelectItem value="sole-proprietorship">Sole Proprietorship</SelectItem>
+                        <SelectItem value="company">Company</SelectItem>
                         <SelectItem value="partnership">Partnership</SelectItem>
-                        <SelectItem value="corporation">Corporation</SelectItem>
-                        <SelectItem value="llc">LLC</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -250,21 +309,11 @@ export default function SellerRegisterPage() {
                   </div>
                   <div>
                     <Label htmlFor="city">City *</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) => handleChange("city", e.target.value)}
-                      required
-                    />
+                    <Input id="city" value={formData.city} onChange={(e) => handleChange("city", e.target.value)} required />
                   </div>
                   <div>
                     <Label htmlFor="state">State/Province *</Label>
-                    <Input
-                      id="state"
-                      value={formData.state}
-                      onChange={(e) => handleChange("state", e.target.value)}
-                      required
-                    />
+                    <Input id="state" value={formData.state} onChange={(e) => handleChange("state", e.target.value)} required />
                   </div>
                   <div>
                     <Label htmlFor="zipCode">ZIP/Postal Code *</Label>
@@ -287,41 +336,35 @@ export default function SellerRegisterPage() {
                 </div>
               </div>
 
-              {/* Document Upload Placeholders */}
+              {/* Bank Information */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Required Documents</h3>
+                <h3 className="text-lg font-semibold">Bank Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Business License/Registration</Label>
-                    <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Click to upload document</p>
-                      <p className="text-xs text-muted-foreground mt-1">PDF, JPG, PNG (Max 5MB)</p>
-                    </div>
+                    <Label htmlFor="bankName">Bank Name *</Label>
+                    <Input
+                      id="bankName"
+                      value={formData.bankName}
+                      onChange={(e) => handleChange("bankName", e.target.value)}
+                      required
+                    />
                   </div>
                   <div>
-                    <Label>Government-Issued ID</Label>
-                    <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Click to upload ID</p>
-                      <p className="text-xs text-muted-foreground mt-1">PDF, JPG, PNG (Max 5MB)</p>
-                    </div>
+                    <Label htmlFor="bankAccountNumber">Account Number *</Label>
+                    <Input
+                      id="bankAccountNumber"
+                      value={formData.bankAccountNumber}
+                      onChange={(e) => handleChange("bankAccountNumber", e.target.value)}
+                      required
+                    />
                   </div>
                   <div>
-                    <Label>Shop Logo (Optional)</Label>
-                    <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Click to upload logo</p>
-                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG (Max 2MB)</p>
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Shop Banner (Optional)</Label>
-                    <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Click to upload banner</p>
-                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG (Max 5MB)</p>
-                    </div>
+                    <Label htmlFor="bankRoutingNumber">Routing Number (Optional)</Label>
+                    <Input
+                      id="bankRoutingNumber"
+                      value={formData.bankRoutingNumber}
+                      onChange={(e) => handleChange("bankRoutingNumber", e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
@@ -348,8 +391,17 @@ export default function SellerRegisterPage() {
               {/* Submit Button */}
               <div className="flex gap-4">
                 <Button type="submit" size="lg" className="flex-1" disabled={loading}>
-                  <Shield className="mr-2 h-5 w-5" />
-                  {loading ? "Submitting Application..." : "Submit Application"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Submitting Application...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="mr-2 h-5 w-5" />
+                      Submit Application
+                    </>
+                  )}
                 </Button>
               </div>
 

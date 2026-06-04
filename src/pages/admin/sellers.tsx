@@ -1,194 +1,381 @@
+"use client";
+
 import { AdminLayout } from "@/components/AdminLayout";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { RoleGuard } from "@/components/RoleGuard";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/database.types";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import { Search, CheckCircle, XCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2, Search, CheckCircle, XCircle, Clock, Ban, Eye, Mail } from "lucide-react";
 
-interface Seller {
-  id: string;
-  business_name: string;
-  email: string | null;
-  phone: string | null;
-  status: string;
-  created_at: string;
-  rating: number;
-  total_reviews: number;
-  user: {
-    email: string;
-  };
-}
-
-export default function AdminSellers() {
-  const { user } = useAuth();
-  const router = useRouter();
+export default function AdminSellersPage() {
   const { toast } = useToast();
-  const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sellers, setSellers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
 
   useEffect(() => {
-    if (!user) {
-      router.push("/");
-      return;
-    }
+    loadSellers();
+  }, []);
 
-    fetchSellers();
-  }, [user, router]);
+  const loadSellers = async () => {
+    try {
+      setLoading(true);
 
-  const fetchSellers = async () => {
-    const { data } = await supabase
-      .from("seller_profiles")
-      .select(`
-        id,
-        business_name,
-        email,
-        phone,
-        status,
-        created_at,
-        rating,
-        total_reviews,
-        user:profiles!seller_profiles_user_id_fkey(email)
-      `)
-      .order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("seller_profiles")
+        .select(`
+          *,
+          profiles:user_id (
+            email,
+            full_name
+          )
+        `)
+        .order("created_at", { ascending: false });
 
-    setSellers((data as any) || []);
-    setLoading(false);
-  };
+      if (error) throw error;
 
-  const updateSellerStatus = async (sellerId: string, status: string) => {
-    type SellerUpdate = Database["public"]["Tables"]["seller_profiles"]["Update"];
-    
-    const updateData: SellerUpdate = {
-      status: status as any,
-    };
-
-    const { error } = await supabase
-      .from("seller_profiles")
-      .update(updateData)
-      .eq("id", sellerId);
-
-    if (error) {
+      setSellers(data || []);
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to update seller status",
+        description: "Could not load sellers",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    toast({
-      title: "Success",
-      description: `Seller ${status}`,
-    });
-
-    fetchSellers();
   };
 
-  const filteredSellers = sellers.filter((seller) =>
-    seller.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    seller.user?.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleApproveSeller = async (sellerId: string, sellerName: string) => {
+    try {
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ verification_status: "approved", verified_at: new Date().toISOString() })
+        .eq("id", sellerId);
 
-  if (loading) {
-    return (
-      <AdminLayout>
-        <div className="text-center py-16">
-          <p className="text-muted-foreground">Loading sellers...</p>
-        </div>
-      </AdminLayout>
-    );
-  }
+      if (error) throw error;
+
+      // Create notification for seller
+      const seller = sellers.find((s) => s.id === sellerId);
+      if (seller) {
+        await supabase.from("notifications").insert({
+          user_id: seller.user_id,
+          title: "Seller Application Approved!",
+          message: "Congratulations! Your seller application has been approved. You can now start selling.",
+          type: "seller_approved",
+          is_read: false,
+        });
+      }
+
+      toast({
+        title: "Seller Approved",
+        description: `${sellerName} has been approved as a seller`,
+      });
+
+      loadSellers();
+    } catch (error: any) {
+      toast({
+        title: "Action Failed",
+        description: error.message || "Could not approve seller",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRejectSeller = async (sellerId: string, sellerName: string) => {
+    try {
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ verification_status: "rejected" })
+        .eq("id", sellerId);
+
+      if (error) throw error;
+
+      // Create notification for seller
+      const seller = sellers.find((s) => s.id === sellerId);
+      if (seller) {
+        await supabase.from("notifications").insert({
+          user_id: seller.user_id,
+          title: "Seller Application Rejected",
+          message: "Unfortunately, your seller application has been rejected. Please contact support for more information.",
+          type: "seller_rejected",
+          is_read: false,
+        });
+      }
+
+      toast({
+        title: "Seller Rejected",
+        description: `${sellerName} application has been rejected`,
+      });
+
+      loadSellers();
+    } catch (error: any) {
+      toast({
+        title: "Action Failed",
+        description: error.message || "Could not reject seller",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSuspendSeller = async (sellerId: string, sellerName: string) => {
+    try {
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ is_active: false })
+        .eq("id", sellerId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Seller Suspended",
+        description: `${sellerName} has been suspended`,
+      });
+
+      loadSellers();
+    } catch (error: any) {
+      toast({
+        title: "Action Failed",
+        description: error.message || "Could not suspend seller",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleActivateSeller = async (sellerId: string, sellerName: string) => {
+    try {
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ is_active: true })
+        .eq("id", sellerId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Seller Activated",
+        description: `${sellerName} has been activated`,
+      });
+
+      loadSellers();
+    } catch (error: any) {
+      toast({
+        title: "Action Failed",
+        description: error.message || "Could not activate seller",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const filteredSellers = sellers.filter((seller) => {
+    const matchesSearch =
+      seller.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      seller.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesFilter = filter === "all" || seller.verification_status === filter;
+
+    return matchesSearch && matchesFilter;
+  });
+
+  const statusCounts = {
+    all: sellers.length,
+    pending: sellers.filter((s) => s.verification_status === "pending").length,
+    approved: sellers.filter((s) => s.verification_status === "approved").length,
+    rejected: sellers.filter((s) => s.verification_status === "rejected").length,
+  };
 
   return (
-    <AdminLayout>
-      <div>
-        <h1 className="text-3xl font-bold mb-8">Seller Management</h1>
-
-        <Card className="p-4 mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search sellers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+    <RoleGuard allowedRoles={["admin"]}>
+      <AdminLayout>
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-3xl font-bold font-serif mb-2">Seller Management</h1>
+            <p className="text-muted-foreground">Approve, reject, or suspend seller accounts</p>
           </div>
-        </Card>
 
-        <div className="space-y-4">
-          {filteredSellers.map((seller) => (
-            <Card key={seller.id} className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-semibold text-lg">{seller.business_name}</h3>
-                    <Badge
-                      className={
-                        seller.status === "approved"
-                          ? "bg-green-500"
-                          : seller.status === "pending"
-                          ? "bg-warning"
-                          : "bg-destructive"
-                      }
-                    >
-                      {seller.status}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Email: {seller.user?.email}
-                  </p>
-                  {seller.phone && (
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Phone: {seller.phone}
-                    </p>
-                  )}
-                  <p className="text-sm text-muted-foreground">
-                    Rating: {seller.rating.toFixed(1)} ({seller.total_reviews} reviews)
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Joined: {new Date(seller.created_at).toLocaleDateString()}
-                  </p>
+          {/* Search and Filters */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by business name or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
 
-                {seller.status === "pending" && (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => updateSellerStatus(seller.id, "approved")}
-                      className="bg-green-500 hover:bg-green-600"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => updateSellerStatus(seller.id, "rejected")}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Reject
-                    </Button>
-                  </div>
-                )}
+                <Tabs value={filter} onValueChange={(value: any) => setFilter(value)}>
+                  <TabsList>
+                    <TabsTrigger value="all">All ({statusCounts.all})</TabsTrigger>
+                    <TabsTrigger value="pending">Pending ({statusCounts.pending})</TabsTrigger>
+                    <TabsTrigger value="approved">Approved ({statusCounts.approved})</TabsTrigger>
+                    <TabsTrigger value="rejected">Rejected ({statusCounts.rejected})</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
-            </Card>
-          ))}
+            </CardContent>
+          </Card>
 
-          {filteredSellers.length === 0 && (
-            <Card className="p-12 text-center">
-              <p className="text-muted-foreground">No sellers found</p>
+          {/* Sellers List */}
+          {loading ? (
+            <div className="flex items-center justify-center py-24">
+              <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredSellers.length > 0 ? (
+            <div className="grid gap-6">
+              {filteredSellers.map((seller) => (
+                <Card key={seller.id}>
+                  <CardContent className="p-6">
+                    <div className="flex flex-col md:flex-row md:items-start gap-6">
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="text-xl font-semibold mb-1">{seller.business_name}</h3>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              {seller.profiles?.email} • {seller.profiles?.full_name}
+                            </p>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge
+                                variant={
+                                  seller.verification_status === "approved"
+                                    ? "default"
+                                    : seller.verification_status === "pending"
+                                    ? "secondary"
+                                    : "destructive"
+                                }
+                              >
+                                {seller.verification_status === "approved" && <CheckCircle className="h-3 w-3 mr-1" />}
+                                {seller.verification_status === "pending" && <Clock className="h-3 w-3 mr-1" />}
+                                {seller.verification_status === "rejected" && <XCircle className="h-3 w-3 mr-1" />}
+                                {seller.verification_status}
+                              </Badge>
+                              {!seller.is_active && (
+                                <Badge variant="destructive">
+                                  <Ban className="h-3 w-3 mr-1" />
+                                  Suspended
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Business Type</p>
+                            <p className="font-medium capitalize">{seller.business_type}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Commission Rate</p>
+                            <p className="font-medium">{seller.commission_rate}%</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Registered</p>
+                            <p className="font-medium">
+                              {new Date(seller.created_at).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </p>
+                          </div>
+                          {seller.verified_at && (
+                            <div>
+                              <p className="text-muted-foreground">Verified</p>
+                              <p className="font-medium">
+                                {new Date(seller.verified_at).toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Description</p>
+                          <p className="text-sm">{seller.description || "No description provided"}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Business Address</p>
+                          <p className="text-sm">{seller.business_address}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        {seller.verification_status === "pending" && (
+                          <>
+                            <Button
+                              onClick={() => handleApproveSeller(seller.id, seller.business_name)}
+                              className="gap-2"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Approve
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              onClick={() => handleRejectSeller(seller.id, seller.business_name)}
+                              className="gap-2"
+                            >
+                              <XCircle className="h-4 w-4" />
+                              Reject
+                            </Button>
+                          </>
+                        )}
+
+                        {seller.verification_status === "approved" && (
+                          <>
+                            {seller.is_active ? (
+                              <Button
+                                variant="destructive"
+                                onClick={() => handleSuspendSeller(seller.id, seller.business_name)}
+                                className="gap-2"
+                              >
+                                <Ban className="h-4 w-4" />
+                                Suspend
+                              </Button>
+                            ) : (
+                              <Button onClick={() => handleActivateSeller(seller.id, seller.business_name)} className="gap-2">
+                                <CheckCircle className="h-4 w-4" />
+                                Activate
+                              </Button>
+                            )}
+                          </>
+                        )}
+
+                        <Button variant="outline" className="gap-2">
+                          <Eye className="h-4 w-4" />
+                          View Details
+                        </Button>
+
+                        <Button variant="outline" className="gap-2">
+                          <Mail className="h-4 w-4" />
+                          Contact
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="text-center py-12">
+                <p className="text-muted-foreground">No sellers found</p>
+              </CardContent>
             </Card>
           )}
         </div>
-      </div>
-    </AdminLayout>
+      </AdminLayout>
+    </RoleGuard>
   );
 }
