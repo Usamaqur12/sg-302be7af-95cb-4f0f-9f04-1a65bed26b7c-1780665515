@@ -492,7 +492,7 @@ export default function ProductDetailPage() {
                 <Separator />
                 <div>
                   <h3 className="font-semibold text-lg mb-4">Write a Review</h3>
-                  <ReviewForm productId={product.id} />
+                  <ReviewForm productId={product.id} productTitle={product.title} />
                 </div>
               </div>
             </TabsContent>
@@ -504,7 +504,17 @@ export default function ProductDetailPage() {
           <h2 className="text-2xl font-bold font-serif mb-6">Related Products</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {relatedProducts.map((relatedProduct) => (
-              <ProductCard key={relatedProduct.id} product={relatedProduct} />
+              <ProductCard 
+                key={relatedProduct.id} 
+                id={relatedProduct.id}
+                title={relatedProduct.title}
+                price={relatedProduct.price}
+                salePrice={relatedProduct.salePrice}
+                image={relatedProduct.images[0]?.url}
+                rating={relatedProduct.rating}
+                totalReviews={relatedProduct.totalReviews}
+                category={relatedProduct.category.name}
+              />
             ))}
           </div>
         </div>
