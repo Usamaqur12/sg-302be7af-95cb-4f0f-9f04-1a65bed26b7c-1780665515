@@ -15,7 +15,8 @@ import {
   LogOut,
   Menu,
   X,
-  Star
+  Star,
+  Store
 } from "lucide-react";
 import { useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
