@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ShoppingBag } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -39,21 +40,78 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!agreedToTerms) {
+      toast({
+        title: "Terms Required",
+        description: "Please accept the terms and conditions.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: "Weak Password",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await signUp(email, password, fullName);
-      
-      toast({
-        title: "Account created!",
-        description: "Welcome to the marketplace.",
+      // 1. Create auth user with customer role
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: "customer",
+          },
+        },
       });
 
-      router.push("/account/dashboard");
+      if (authError) throw authError;
+
+      if (!authData.user) {
+        throw new Error("User creation failed");
+      }
+
+      // 2. Create customer profile
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: authData.user.id,
+        email: email,
+        full_name: fullName,
+        phone: phone || null,
+        role: "customer",
+      });
+
+      if (profileError) throw profileError;
+
+      toast({
+        title: "Account Created!",
+        description: "Welcome to the marketplace. You can now log in.",
+      });
+
+      // Sign user in automatically
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        // If auto sign-in fails, redirect to login
+        router.push("/login");
+      } else {
+        router.push("/account/dashboard");
+      }
     } catch (error: any) {
+      console.error("Registration error:", error);
       toast({
         title: "Registration Failed",
-        description: error.message || "Could not create account",
+        description: error.message || "Could not create account. Please try again.",
         variant: "destructive",
       });
     } finally {

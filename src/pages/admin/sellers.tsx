@@ -54,19 +54,25 @@ export default function AdminSellersPage() {
 
   const handleApproveSeller = async (sellerId: string, sellerName: string) => {
     try {
-      // Note: verification_status and notifications require Phase 2 migration
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ 
+          verification_status: "approved", 
+          verified_at: new Date().toISOString() 
+        })
+        .eq("id", sellerId);
+
+      if (error) throw error;
+
       toast({
-        title: "Feature Coming Soon",
-        description: "Seller approval system will be available after Phase 2 database migration is complete.",
+        title: "Seller Approved",
+        description: `${sellerName} has been approved and can now access their dashboard.`,
       });
 
-      // TODO: Uncomment after Phase 2 migration
-      // const { error } = await supabase
-      //   .from("seller_profiles")
-      //   .update({ verification_status: "approved", verified_at: new Date().toISOString() })
-      //   .eq("id", sellerId);
-      // if (error) throw error;
+      // Reload sellers list
+      await loadSellers();
     } catch (error: any) {
+      console.error("Approve error:", error);
       toast({
         title: "Action Failed",
         description: error.message || "Could not approve seller",
@@ -77,11 +83,26 @@ export default function AdminSellersPage() {
 
   const handleRejectSeller = async (sellerId: string, sellerName: string) => {
     try {
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ 
+          verification_status: "rejected",
+          verified_at: null
+        })
+        .eq("id", sellerId);
+
+      if (error) throw error;
+
       toast({
-        title: "Feature Coming Soon",
-        description: "Seller rejection system will be available after Phase 2 database migration is complete.",
+        title: "Seller Rejected",
+        description: `${sellerName} has been rejected.`,
+        variant: "destructive",
       });
+
+      // Reload sellers list
+      await loadSellers();
     } catch (error: any) {
+      console.error("Reject error:", error);
       toast({
         title: "Action Failed",
         description: error.message || "Could not reject seller",
@@ -92,11 +113,25 @@ export default function AdminSellersPage() {
 
   const handleSuspendSeller = async (sellerId: string, sellerName: string) => {
     try {
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ 
+          verification_status: "suspended" 
+        })
+        .eq("id", sellerId);
+
+      if (error) throw error;
+
       toast({
-        title: "Feature Coming Soon",
-        description: "Seller suspension system will be available after Phase 2 database migration is complete.",
+        title: "Seller Suspended",
+        description: `${sellerName} has been suspended.`,
+        variant: "destructive",
       });
+
+      // Reload sellers list
+      await loadSellers();
     } catch (error: any) {
+      console.error("Suspend error:", error);
       toast({
         title: "Action Failed",
         description: error.message || "Could not suspend seller",
@@ -107,11 +142,25 @@ export default function AdminSellersPage() {
 
   const handleActivateSeller = async (sellerId: string, sellerName: string) => {
     try {
+      const { error } = await supabase
+        .from("seller_profiles")
+        .update({ 
+          verification_status: "approved",
+          verified_at: new Date().toISOString()
+        })
+        .eq("id", sellerId);
+
+      if (error) throw error;
+
       toast({
-        title: "Feature Coming Soon",
-        description: "Seller activation system will be available after Phase 2 database migration is complete.",
+        title: "Seller Activated",
+        description: `${sellerName} has been activated.`,
       });
+
+      // Reload sellers list
+      await loadSellers();
     } catch (error: any) {
+      console.error("Activate error:", error);
       toast({
         title: "Action Failed",
         description: error.message || "Could not activate seller",
@@ -125,17 +174,16 @@ export default function AdminSellersPage() {
       seller.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       seller.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Note: Filter by verification_status will work after Phase 2 migration
-    const matchesFilter = filter === "all"; // || seller.verification_status === filter;
+    const matchesFilter = filter === "all" || seller.verification_status === filter;
 
     return matchesSearch && matchesFilter;
   });
 
   const statusCounts = {
     all: sellers.length,
-    pending: 0, // sellers.filter((s) => s.verification_status === "pending").length,
-    approved: 0, // sellers.filter((s) => s.verification_status === "approved").length,
-    rejected: 0, // sellers.filter((s) => s.verification_status === "rejected").length,
+    pending: sellers.filter((s) => s.verification_status === "pending" || !s.verification_status).length,
+    approved: sellers.filter((s) => s.verification_status === "approved").length,
+    rejected: sellers.filter((s) => s.verification_status === "rejected").length,
   };
 
   return (
@@ -192,10 +240,30 @@ export default function AdminSellersPage() {
                               {seller.profiles?.email} • {seller.profiles?.full_name}
                             </p>
                             <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="secondary">
-                                <Clock className="h-3 w-3 mr-1" />
-                                Pending Migration
-                              </Badge>
+                              {seller.verification_status === "approved" && seller.verified_at && (
+                                <Badge variant="default" className="bg-green-500/10 text-green-700">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Approved
+                                </Badge>
+                              )}
+                              {seller.verification_status === "rejected" && (
+                                <Badge variant="destructive">
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  Rejected
+                                </Badge>
+                              )}
+                              {seller.verification_status === "suspended" && (
+                                <Badge variant="destructive">
+                                  <Ban className="h-3 w-3 mr-1" />
+                                  Suspended
+                                </Badge>
+                              )}
+                              {(!seller.verification_status || seller.verification_status === "pending") && (
+                                <Badge variant="secondary">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Pending Approval
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -233,22 +301,48 @@ export default function AdminSellersPage() {
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        <Button
-                          onClick={() => handleApproveSeller(seller.id, seller.business_name)}
-                          className="gap-2"
-                          variant="outline"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                          Approve (Coming Soon)
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => handleRejectSeller(seller.id, seller.business_name)}
-                          className="gap-2"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          Reject (Coming Soon)
-                        </Button>
+                        {(!seller.verification_status || seller.verification_status === "pending") && (
+                          <>
+                            <Button
+                              onClick={() => handleApproveSeller(seller.id, seller.business_name)}
+                              className="gap-2"
+                              variant="default"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Approve
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              onClick={() => handleRejectSeller(seller.id, seller.business_name)}
+                              className="gap-2"
+                            >
+                              <XCircle className="h-4 w-4" />
+                              Reject
+                            </Button>
+                          </>
+                        )}
+
+                        {seller.verification_status === "approved" && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => handleSuspendSeller(seller.id, seller.business_name)}
+                            className="gap-2"
+                          >
+                            <Ban className="h-4 w-4" />
+                            Suspend
+                          </Button>
+                        )}
+
+                        {(seller.verification_status === "rejected" || seller.verification_status === "suspended") && (
+                          <Button
+                            onClick={() => handleActivateSeller(seller.id, seller.business_name)}
+                            className="gap-2"
+                            variant="default"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                            Activate
+                          </Button>
+                        )}
 
                         <Button variant="outline" className="gap-2">
                           <Eye className="h-4 w-4" />
