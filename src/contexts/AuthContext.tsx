@@ -9,7 +9,6 @@ interface UserProfile {
   email: string;
   full_name: string;
   role: "customer" | "vendor" | "admin";
-  status: "active" | "pending" | "suspended";
   phone?: string;
 }
 

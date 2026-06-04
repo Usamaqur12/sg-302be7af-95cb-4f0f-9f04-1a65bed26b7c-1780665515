@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ShoppingBag } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();

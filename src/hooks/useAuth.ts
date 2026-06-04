@@ -7,7 +7,6 @@ interface UserProfile {
   email: string;
   full_name: string;
   role: "customer" | "vendor" | "admin";
-  status: "active" | "pending" | "suspended";
   phone?: string;
 }
 
@@ -58,7 +57,6 @@ export function useAuth() {
         email: data.email,
         full_name: data.full_name || "",
         role: data.role || "customer",
-        status: data.status || "active",
         phone: data.phone,
       });
     } catch (error) {

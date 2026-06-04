@@ -83,45 +83,5 @@ export function RoleGuard({ children, allowedRoles, redirectTo }: RoleGuardProps
     );
   }
 
-  // Check for pending vendor status
-  if (profile?.role === "vendor" && profile?.status === "pending") {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Account Pending Approval</h2>
-            <p className="text-muted-foreground mb-6">
-              Your seller account is pending admin approval. You'll receive an email once your account is activated.
-            </p>
-            <Button asChild>
-              <Link href="/">Go to Homepage</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Check for suspended account
-  if (profile?.status === "suspended") {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Account Suspended</h2>
-            <p className="text-muted-foreground mb-6">
-              Your account has been suspended. Please contact support for more information.
-            </p>
-            <Button asChild>
-              <Link href="/contact">Contact Support</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return <>{children}</>;
 }

@@ -32,7 +32,7 @@ export default function SellerLoginPage() {
       // Fetch user profile to verify role
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("role, status")
+        .select("role")
         .eq("id", user.id)
         .single();
 
