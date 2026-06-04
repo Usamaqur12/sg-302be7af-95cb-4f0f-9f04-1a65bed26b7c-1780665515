@@ -142,7 +142,7 @@ export default function ProductDetailPage() {
 
   const handleToggleWishlist = () => {
     if (!product) return;
-    toggleWishlist(product.id);
+    toggleWishlist(product.id, product.title);
   };
 
   const incrementQuantity = () => {
@@ -508,8 +508,7 @@ export default function ProductDetailPage() {
                 key={relatedProduct.id} 
                 id={relatedProduct.id}
                 title={relatedProduct.title}
-                price={relatedProduct.price}
-                salePrice={relatedProduct.salePrice}
+                price={relatedProduct.salePrice || relatedProduct.price}
                 image={relatedProduct.images[0]?.url}
                 rating={relatedProduct.rating}
                 totalReviews={relatedProduct.totalReviews}
