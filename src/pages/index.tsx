@@ -314,7 +314,7 @@ export default function HomePage() {
       <ShockingDealsSection />
 
       {/* Featured Categories */}
-      <section className="py-16 bg-background">
+      <section className="py-12 md:py-16 bg-background">
         <div className="container">
           <div className="flex items-center justify-between mb-8">
             <div>

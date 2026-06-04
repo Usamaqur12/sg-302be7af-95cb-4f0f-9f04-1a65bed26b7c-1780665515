@@ -44,24 +44,24 @@ export function CountdownTimer({ endDate }: CountdownTimerProps) {
   }, [endDate]);
 
   const TimeBox = ({ value, label }: { value: number; label: string }) => (
-    <div className="flex flex-col items-center">
-      <div className="bg-card border-2 border-destructive rounded-md px-2 py-1 min-w-[40px]">
-        <span className="text-lg font-bold font-mono text-destructive">
+    <div className="flex flex-col items-center min-w-[42px]">
+      <div className="bg-accent/5 border-2 border-accent rounded-lg px-2 py-1.5 w-full flex items-center justify-center">
+        <span className="text-sm lg:text-base font-bold font-mono text-accent tabular-nums">
           {String(value).padStart(2, "0")}
         </span>
       </div>
-      <span className="text-xs text-muted-foreground mt-1">{label}</span>
+      <span className="text-[10px] text-muted-foreground mt-1 font-medium">{label}</span>
     </div>
   );
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center justify-center gap-1.5">
       <TimeBox value={timeLeft.days} label="Days" />
-      <span className="text-muted-foreground">:</span>
+      <span className="text-muted-foreground font-bold mb-4">:</span>
       <TimeBox value={timeLeft.hours} label="Hours" />
-      <span className="text-muted-foreground">:</span>
+      <span className="text-muted-foreground font-bold mb-4">:</span>
       <TimeBox value={timeLeft.minutes} label="Mins" />
-      <span className="text-muted-foreground">:</span>
+      <span className="text-muted-foreground font-bold mb-4">:</span>
       <TimeBox value={timeLeft.seconds} label="Secs" />
     </div>
   );
