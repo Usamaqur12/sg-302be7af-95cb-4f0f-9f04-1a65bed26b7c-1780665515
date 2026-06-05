@@ -121,12 +121,12 @@ export default function SellerRegisterPage() {
         user_id: authData.user.id,
         business_name: formData.shopName,
         business_description: formData.shopDescription,
-        business_type: formData.businessType,
+        business_type: formData.businessType as "individual" | "company" | "partnership",
         business_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
         commission_rate: 12, // Default commission rate
         bank_account_number: formData.bankAccountNumber,
         bank_name: formData.bankName,
-        bank_routing_number: formData.bankRoutingNumber,
+        bank_routing_number: formData.bankRoutingNumber || undefined,
         status: "pending", // Set initial status as pending
       });
 

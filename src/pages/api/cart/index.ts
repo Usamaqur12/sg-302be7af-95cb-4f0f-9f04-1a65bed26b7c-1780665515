@@ -20,9 +20,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === "POST") {
       // Add item to cart
-      const { product_id, quantity, variant_id } = req.body;
-      const cartItem = await cartService.addToCart(user.id, product_id, quantity, variant_id);
-      return res.status(201).json(successResponse("Item added to cart", cartItem));
+      const { productId, quantity } = req.body;
+
+      if (!productId || !quantity) {
+        return res.status(400).json({ error: "Product ID and quantity required" });
+      }
+
+      const data = await cartService.addToCart(user.id, productId, quantity);
+      return res.status(200).json(data);
     }
 
     return res.status(405).json(errorResponse("Method not allowed"));

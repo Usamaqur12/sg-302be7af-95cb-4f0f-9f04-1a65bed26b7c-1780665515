@@ -31,9 +31,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Register vendor
-    const vendor = await vendorService.registerVendor(user.id, validation.data!);
+    const vendorData = await vendorService.registerVendor(user.id, {
+      business_name: validation.data!.business_name,
+      business_description: validation.data!.description || "",
+      business_type: validation.data!.business_type,
+      business_address: validation.data!.business_address,
+      bank_account_number: validation.data!.bank_account_number,
+      bank_name: validation.data!.bank_name,
+      bank_routing_number: validation.data!.bank_routing_number,
+    });
 
-    return res.status(201).json(successResponse("Vendor registered successfully", vendor));
+    return res.status(201).json(successResponse("Vendor registered successfully", vendorData));
   } catch (error: any) {
     console.error("Vendor registration error:", error);
     return res.status(500).json(errorResponse(error.message || "Internal server error"));
