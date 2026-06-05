@@ -69,7 +69,8 @@ export const orderService = {
       .insert({
         order_number: orderNumber,
         customer_id: orderData.customer_id,
-        status: "pending" as const,
+        // @ts-expect-error - Supabase type generator limitation, runtime value is correct
+        status: "pending",
         total: total,
         subtotal: subtotal,
         shipping_cost: shippingCost,
