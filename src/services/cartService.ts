@@ -48,13 +48,15 @@ export const cartService = {
    */
   addToCart: async (userId: string, productId: string, quantity: number) => {
     // Get or create cart
-    let { data: cart, error: cartError } = await supabase
+    const { data: cartData, error: cartError } = await supabase
       .from("carts")
       .select("id")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (cartError) throw cartError;
+
+    let cart = cartData;
 
     if (!cart) {
       const { data: newCart, error: createError } = await supabase

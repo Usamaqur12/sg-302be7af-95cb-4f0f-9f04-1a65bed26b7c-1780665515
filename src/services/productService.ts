@@ -125,7 +125,7 @@ export const productService = {
         compare_at_price: productData.compare_at_price,
         stock_quantity: productData.stock_quantity,
         sku: productData.sku,
-        status: "pending" as const,
+        status: "pending",
       })
       .select()
       .single();

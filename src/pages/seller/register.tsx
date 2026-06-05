@@ -32,7 +32,7 @@ export default function SellerRegisterPage() {
     // Business Information  
     shopName: "",
     shopDescription: "",
-    businessType: "individual" as const,
+    businessType: "individual",
 
     // Address
     address: "",
@@ -121,13 +121,13 @@ export default function SellerRegisterPage() {
         user_id: authData.user.id,
         business_name: formData.shopName,
         business_description: formData.shopDescription,
-        business_type: formData.businessType as const,
+        business_type: formData.businessType,
         business_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
-        commission_rate: 12, // Default commission rate
+        commission_rate: 12,
         bank_account_number: formData.bankAccountNumber,
         bank_name: formData.bankName,
         bank_routing_number: formData.bankRoutingNumber || null,
-        status: "pending" as const,
+        status: "pending",
       });
 
       if (sellerProfileError) throw sellerProfileError;
