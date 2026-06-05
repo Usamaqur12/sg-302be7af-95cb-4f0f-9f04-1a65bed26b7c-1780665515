@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { CustomerLayout } from "@/components/CustomerLayout";
@@ -16,13 +16,26 @@ import { supabase } from "@/integrations/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn } = useAuthContext();
+  const { signIn, profile } = useAuthContext();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Redirect based on role after successful login
+  useEffect(() => {
+    if (profile) {
+      if (profile.role === "admin") {
+        router.push("/admin");
+      } else if (profile.role === "seller") {
+        router.push("/seller");
+      } else {
+        router.push("/");
+      }
+    }
+  }, [profile, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,30 +50,21 @@ export default function LoginPage() {
           description: error.message || "Invalid email or password",
           variant: "destructive",
         });
+        setLoading(false);
         return;
       }
 
-      // Success - AuthContext will handle profile fetch and navigation happens via useEffect
+      // Success - useEffect will handle redirect after profile loads
       toast({
         title: "Success",
         description: "Logged in successfully",
       });
-
-      // Redirect based on role after profile is loaded
-      if (profile?.role === "admin") {
-        router.push("/admin");
-      } else if (profile?.role === "seller") {
-        router.push("/seller");
-      } else {
-        router.push("/");
-      }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Something went wrong",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };

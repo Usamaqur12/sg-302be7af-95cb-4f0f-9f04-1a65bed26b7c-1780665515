@@ -44,7 +44,6 @@ export default function AccountDashboardPage() {
   const [profileData, setProfileData] = useState({
     fullName: "",
     email: "",
-    phone: "",
   });
 
   const [shippingAddress, setShippingAddress] = useState({
@@ -69,7 +68,6 @@ export default function AccountDashboardPage() {
       setProfileData({
         fullName: profile?.full_name || "",
         email: user?.email || "",
-        phone: profile?.phone || "",
       });
 
       // Load orders
@@ -112,7 +110,6 @@ export default function AccountDashboardPage() {
         .from("profiles")
         .update({
           full_name: profileData.fullName,
-          phone: profileData.phone,
         })
         .eq("id", user.id);
 
@@ -344,16 +341,6 @@ export default function AccountDashboardPage() {
                             className="bg-muted"
                           />
                           <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="phone">Phone Number</Label>
-                          <Input
-                            id="phone"
-                            value={profileData.phone}
-                            onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                            disabled={!isEditing}
-                          />
                         </div>
                       </div>
 
