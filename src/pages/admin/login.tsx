@@ -61,6 +61,11 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        <div className="text-center mb-6">
+          <h1 className="text-4xl font-bold text-white mb-2">Multi-Vendor Marketplace</h1>
+          <p className="text-slate-300">Administrator Portal</p>
+        </div>
+        
         <Card>
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
