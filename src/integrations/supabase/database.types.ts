@@ -1052,6 +1052,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_admin: { Args: never; Returns: boolean }
       search_products: {
         Args: { search_query: string }
         Returns: {

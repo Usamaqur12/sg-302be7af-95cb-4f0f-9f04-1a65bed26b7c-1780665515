@@ -173,7 +173,7 @@ export default function HomePage() {
         })));
       }
     } catch (error) {
-      console.error("Error fetching homepage data:", error);
+      // Silent error handling - just set empty arrays
     } finally {
       setLoading(false);
     }

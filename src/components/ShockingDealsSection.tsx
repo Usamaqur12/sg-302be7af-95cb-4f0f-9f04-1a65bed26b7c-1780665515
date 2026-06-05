@@ -51,7 +51,8 @@ export function ShockingDealsSection() {
         .limit(12);
 
       if (error) {
-        console.error("Error fetching deals:", error);
+        setDealProducts([]);
+        setLoading(false);
         return;
       }
 
@@ -83,7 +84,7 @@ export function ShockingDealsSection() {
         }
       }
     } catch (error) {
-      console.error("Error fetching deal products:", error);
+      setDealProducts([]);
     } finally {
       setLoading(false);
     }

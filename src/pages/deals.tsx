@@ -1,94 +1,89 @@
+"use client";
+
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Zap, Clock, TrendingDown } from "lucide-react";
-
-const flashDeals = [
-  {
-    id: "1",
-    title: "Wireless Noise Cancelling Headphones",
-    price: 149.99,
-    compareAtPrice: 299.99,
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop",
-    rating: 4.8,
-    reviewCount: 1234,
-    sellerName: "TechPro Store",
-  },
-  {
-    id: "2",
-    title: "4K Ultra HD Smart TV 55\"",
-    price: 499.99,
-    compareAtPrice: 899.99,
-    image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=600&h=600&fit=crop",
-    rating: 4.7,
-    reviewCount: 789,
-    sellerName: "Home Electronics",
-  },
-  {
-    id: "3",
-    title: "Gaming Laptop RTX 4070",
-    price: 1699.99,
-    compareAtPrice: 2299.99,
-    image: "https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=600&h=600&fit=crop",
-    rating: 4.9,
-    reviewCount: 432,
-    sellerName: "Gaming Gear",
-  },
-  {
-    id: "4",
-    title: "Professional DSLR Camera",
-    price: 999.99,
-    compareAtPrice: 1599.99,
-    image: "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&h=600&fit=crop",
-    rating: 4.8,
-    reviewCount: 567,
-    sellerName: "Photo Masters",
-  },
-  {
-    id: "5",
-    title: "Ergonomic Office Chair",
-    price: 279.99,
-    compareAtPrice: 499.99,
-    image: "https://images.unsplash.com/photo-1580480055273-228ff5388ef8?w=600&h=600&fit=crop",
-    rating: 4.5,
-    reviewCount: 321,
-    sellerName: "Office Plus",
-  },
-  {
-    id: "6",
-    title: "Bluetooth Speaker Waterproof",
-    price: 69.99,
-    compareAtPrice: 129.99,
-    image: "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&h=600&fit=crop",
-    rating: 4.6,
-    reviewCount: 1456,
-    sellerName: "Sound Solutions",
-  },
-  {
-    id: "7",
-    title: "Smart Watch Series 7",
-    price: 299.99,
-    compareAtPrice: 449.99,
-    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&h=600&fit=crop",
-    rating: 4.7,
-    reviewCount: 892,
-    sellerName: "Wearable Tech",
-  },
-  {
-    id: "8",
-    title: "Mechanical Gaming Keyboard RGB",
-    price: 129.99,
-    compareAtPrice: 229.99,
-    image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&h=600&fit=crop",
-    rating: 4.8,
-    reviewCount: 654,
-    sellerName: "Gaming Gear",
-  },
-];
+import { Zap, Clock, TrendingDown, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 
 export default function DealsPage() {
+  const [deals, setDeals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    maxDiscount: 0,
+    activeDeals: 0,
+    totalSavings: 0,
+  });
+
+  useEffect(() => {
+    fetchDeals();
+  }, []);
+
+  const fetchDeals = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select(`
+          id,
+          title,
+          price,
+          compare_at_price,
+          rating,
+          total_reviews,
+          images:product_images(url),
+          seller:seller_profiles!seller_id(id, business_name)
+        `)
+        .eq("status", "approved")
+        .eq("is_deal", true)
+        .gte("deal_expires_at", new Date().toISOString())
+        .limit(20);
+
+      if (error) {
+        setDeals([]);
+        return;
+      }
+
+      const formattedDeals = (data || []).map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        price: p.price,
+        compareAtPrice: p.compare_at_price || p.price * 1.3,
+        image: p.images?.[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop",
+        rating: p.rating || 4.5,
+        reviewCount: p.total_reviews || 0,
+        sellerName: p.seller?.business_name || "Unknown Seller",
+        sellerId: p.seller?.id,
+      }));
+
+      setDeals(formattedDeals);
+
+      // Calculate stats
+      let maxDisc = 0;
+      let totalSav = 0;
+      formattedDeals.forEach((deal) => {
+        if (deal.compareAtPrice > deal.price) {
+          const disc = Math.round(((deal.compareAtPrice - deal.price) / deal.compareAtPrice) * 100);
+          if (disc > maxDisc) maxDisc = disc;
+          totalSav += deal.compareAtPrice - deal.price;
+        }
+      });
+
+      setStats({
+        maxDiscount: maxDisc,
+        activeDeals: formattedDeals.length,
+        totalSavings: totalSav,
+      });
+    } catch (error) {
+      setDeals([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <CustomerLayout>
       {/* Hero Banner */}
@@ -99,7 +94,7 @@ export default function DealsPage() {
             <div>
               <h1 className="text-4xl font-bold mb-2">Today's Flash Deals</h1>
               <p className="text-lg text-muted-foreground">
-                Limited time offers — up to 70% off on selected products
+                Limited time offers — up to {stats.maxDiscount}% off on selected products
               </p>
             </div>
           </div>
@@ -107,10 +102,10 @@ export default function DealsPage() {
           <div className="flex items-center gap-4 text-sm">
             <Badge className="bg-destructive text-destructive-foreground">
               <Clock className="h-3 w-3 mr-1" />
-              Ends in 6h 32m
+              Limited Time
             </Badge>
             <span className="text-muted-foreground">
-              New deals added daily at 12:00 AM
+              Deals updated regularly
             </span>
           </div>
         </div>
@@ -119,27 +114,22 @@ export default function DealsPage() {
       {/* Deal Stats */}
       <div className="border-b bg-muted/30">
         <div className="container py-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Card className="p-4 text-center">
               <TrendingDown className="h-8 w-8 text-accent mx-auto mb-2" />
-              <p className="text-2xl font-bold font-mono">70%</p>
+              <p className="text-2xl font-bold font-mono">{stats.maxDiscount}%</p>
               <p className="text-sm text-muted-foreground">Max Discount</p>
             </Card>
             <Card className="p-4 text-center">
               <Zap className="h-8 w-8 text-warning mx-auto mb-2" />
-              <p className="text-2xl font-bold font-mono">1,234</p>
+              <p className="text-2xl font-bold font-mono">{stats.activeDeals}</p>
               <p className="text-sm text-muted-foreground">Active Deals</p>
-            </Card>
-            <Card className="p-4 text-center">
-              <Clock className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold font-mono">6h 32m</p>
-              <p className="text-sm text-muted-foreground">Time Left</p>
             </Card>
             <Card className="p-4 text-center">
               <div className="h-8 w-8 bg-primary rounded-full mx-auto mb-2 flex items-center justify-center text-primary-foreground font-bold">
                 $
               </div>
-              <p className="text-2xl font-bold font-mono">$450K</p>
+              <p className="text-2xl font-bold font-mono">${stats.totalSavings.toFixed(0)}</p>
               <p className="text-sm text-muted-foreground">Total Savings</p>
             </Card>
           </div>
@@ -150,28 +140,33 @@ export default function DealsPage() {
       <div className="container py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">Lightning Deals</h2>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              All Categories
-            </Button>
-            <Button variant="outline" size="sm">
-              Price: Low to High
-            </Button>
-            <Button variant="outline" size="sm">
-              Discount %
-            </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-muted-foreground">Loading deals...</p>
+            </div>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {flashDeals.map((product) => (
-            <ProductCard key={product.id} {...product} />
-          ))}
-        </div>
-
-        <div className="text-center mt-12">
-          <Button size="lg">Load More Deals</Button>
-        </div>
+        ) : deals.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {deals.map((product) => (
+              <ProductCard key={product.id} {...product} />
+            ))}
+          </div>
+        ) : (
+          <Card className="p-12 text-center">
+            <Zap className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-lg font-semibold mb-2">No active deals right now</p>
+            <p className="text-muted-foreground mb-6">
+              Check back soon for new deals!
+            </p>
+            <Button onClick={() => window.location.href = "/products"}>
+              Browse All Products
+            </Button>
+          </Card>
+        )}
       </div>
     </CustomerLayout>
   );
