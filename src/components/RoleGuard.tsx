@@ -3,7 +3,7 @@
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -22,7 +22,7 @@ export function RoleGuard({ children, allowedRoles, redirectTo }: RoleGuardProps
     if (loading) return;
 
     if (!user) {
-      // Determine redirect based on required role
+      // Redirect based on required role, but don't block render
       if (allowedRoles.includes("admin")) {
         router.push("/admin/login");
       } else if (allowedRoles.includes("seller")) {
@@ -30,7 +30,6 @@ export function RoleGuard({ children, allowedRoles, redirectTo }: RoleGuardProps
       } else {
         router.push("/login");
       }
-      return;
     }
 
     if (profile && !allowedRoles.includes(profile.role)) {
@@ -40,6 +39,7 @@ export function RoleGuard({ children, allowedRoles, redirectTo }: RoleGuardProps
     }
   }, [user, profile, loading, allowedRoles, redirectTo, router]);
 
+  // Show loading spinner during auth check
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -48,22 +48,56 @@ export function RoleGuard({ children, allowedRoles, redirectTo }: RoleGuardProps
     );
   }
 
+  // Show login required if not authenticated - NEVER return null
   if (!user) {
-    return null;
-  }
+    const loginPath = allowedRoles.includes("admin") 
+      ? "/admin/login" 
+      : allowedRoles.includes("seller") 
+      ? "/seller/login" 
+      : "/login";
 
-  if (profile && !allowedRoles.includes(profile.role)) {
+    const roleLabel = allowedRoles.includes("admin") 
+      ? "Admin" 
+      : allowedRoles.includes("seller") 
+      ? "Seller" 
+      : "Customer";
+
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
         <Card className="max-w-md w-full">
-          <CardContent className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+          <CardContent className="p-8 text-center">
+            <Lock className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
             <p className="text-muted-foreground mb-6">
-              You don't have permission to access this page.
+              You must be logged in as {roleLabel.toLowerCase()} to access this page.
             </p>
             <div className="flex flex-col gap-2">
-              <Button asChild>
+              <Button asChild size="lg">
+                <Link href={loginPath}>Go to {roleLabel} Login</Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/">Go to Homepage</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show access denied if wrong role - NEVER return null
+  if (profile && !allowedRoles.includes(profile.role)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+            <p className="text-muted-foreground mb-6">
+              You don't have permission to access this page. Your role: {profile.role}
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button asChild size="lg">
                 <Link href="/">Go to Homepage</Link>
               </Button>
               {profile.role === "seller" && (
