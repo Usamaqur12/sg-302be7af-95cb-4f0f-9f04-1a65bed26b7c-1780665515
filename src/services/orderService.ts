@@ -69,7 +69,7 @@ export const orderService = {
       .insert({
         order_number: orderNumber,
         customer_id: orderData.customer_id,
-        status: "pending",
+        status: "pending" as const,
         total: total,
         subtotal: subtotal,
         shipping_cost: shippingCost,

@@ -107,10 +107,17 @@ export const productService = {
     sku: string;
     images: string[];
   }) => {
+    // Generate slug from title
+    const slug = productData.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
     const { data: product, error: productError } = await supabase
       .from("products")
       .insert({
         title: productData.title,
+        slug: slug,
         description: productData.description,
         category_id: productData.category_id,
         seller_id: productData.seller_id,
@@ -118,7 +125,7 @@ export const productService = {
         compare_at_price: productData.compare_at_price,
         stock_quantity: productData.stock_quantity,
         sku: productData.sku,
-        status: "pending",
+        status: "pending" as const,
       })
       .select()
       .single();
