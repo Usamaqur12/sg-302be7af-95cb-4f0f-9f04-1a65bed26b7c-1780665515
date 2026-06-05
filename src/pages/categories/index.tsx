@@ -1,97 +1,80 @@
+"use client";
+
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { CategoryCard } from "@/components/CategoryCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
-
-const allCategories = [
-  {
-    id: "1",
-    name: "Electronics",
-    slug: "electronics",
-    image: "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800&h=800&fit=crop",
-    productCount: 1243,
-  },
-  {
-    id: "2",
-    name: "Fashion",
-    slug: "fashion",
-    image: "https://images.unsplash.com/photo-1445205170230-053b83016050?w=800&h=800&fit=crop",
-    productCount: 2156,
-  },
-  {
-    id: "3",
-    name: "Home & Garden",
-    slug: "home-garden",
-    image: "https://images.unsplash.com/photo-1556912173-46c336c7fd55?w=800&h=800&fit=crop",
-    productCount: 876,
-  },
-  {
-    id: "4",
-    name: "Sports & Outdoors",
-    slug: "sports-outdoors",
-    image: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&h=800&fit=crop",
-    productCount: 654,
-  },
-  {
-    id: "5",
-    name: "Books & Media",
-    slug: "books-media",
-    image: "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=800&h=800&fit=crop",
-    productCount: 923,
-  },
-  {
-    id: "6",
-    name: "Toys & Kids",
-    slug: "toys-kids",
-    image: "https://images.unsplash.com/photo-1560582861-45078880e48e?w=800&h=800&fit=crop",
-    productCount: 445,
-  },
-  {
-    id: "7",
-    name: "Beauty & Health",
-    slug: "beauty-health",
-    image: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800&h=800&fit=crop",
-    productCount: 789,
-  },
-  {
-    id: "8",
-    name: "Automotive",
-    slug: "automotive",
-    image: "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800&h=800&fit=crop",
-    productCount: 534,
-  },
-  {
-    id: "9",
-    name: "Pet Supplies",
-    slug: "pet-supplies",
-    image: "https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=800&h=800&fit=crop",
-    productCount: 412,
-  },
-  {
-    id: "10",
-    name: "Office Supplies",
-    slug: "office-supplies",
-    image: "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=800&h=800&fit=crop",
-    productCount: 321,
-  },
-  {
-    id: "11",
-    name: "Food & Grocery",
-    slug: "food-grocery",
-    image: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&h=800&fit=crop",
-    productCount: 1567,
-  },
-  {
-    id: "12",
-    name: "Arts & Crafts",
-    slug: "arts-crafts",
-    image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800&h=800&fit=crop",
-    productCount: 678,
-  },
-];
+import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { Search, Loader2, Package } from "lucide-react";
+import Link from "next/link";
 
 export default function CategoriesPage() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("id, name, slug, image_url")
+        .order("name", { ascending: true });
+
+      if (error) {
+        setCategories([]);
+      } else {
+        // Count products for each category
+        const categoriesWithCount = await Promise.all(
+          (data || []).map(async (cat) => {
+            const { count } = await supabase
+              .from("products")
+              .select("id", { count: "exact", head: true })
+              .eq("category_id", cat.id)
+              .eq("status", "approved");
+
+            return {
+              id: cat.id,
+              name: cat.name,
+              slug: cat.slug,
+              image: cat.image_url || "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800&h=800&fit=crop",
+              productCount: count || 0,
+            };
+          })
+        );
+
+        setCategories(categoriesWithCount);
+      }
+    } catch (error) {
+      setCategories([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredCategories = categories.filter((cat) =>
+    cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <CustomerLayout>
+        <div className="container py-16 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Loading categories...</p>
+          </div>
+        </div>
+      </CustomerLayout>
+    );
+  }
+
   return (
     <CustomerLayout>
       <div className="container py-8">
@@ -102,22 +85,49 @@ export default function CategoriesPage() {
           </p>
         </div>
 
-        <div className="mb-8">
-          <div className="relative max-w-2xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search categories..."
-              className="pl-10 h-12"
-            />
-          </div>
-        </div>
+        {categories.length > 0 ? (
+          <>
+            <div className="mb-8">
+              <div className="relative max-w-2xl">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search categories..."
+                  className="pl-10 h-12"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {allCategories.map((category) => (
-            <CategoryCard key={category.id} {...category} />
-          ))}
-        </div>
+            {filteredCategories.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {filteredCategories.map((category) => (
+                  <CategoryCard key={category.id} {...category} />
+                ))}
+              </div>
+            ) : (
+              <Card className="p-12 text-center">
+                <p className="text-lg font-semibold mb-2">No categories found</p>
+                <p className="text-muted-foreground mb-4">
+                  Try searching with different keywords
+                </p>
+                <Button onClick={() => setSearchQuery("")}>Clear Search</Button>
+              </Card>
+            )}
+          </>
+        ) : (
+          <Card className="p-12 text-center">
+            <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-lg font-semibold mb-2">No categories available</p>
+            <p className="text-muted-foreground mb-6">
+              Categories will appear here once they are added to the catalog
+            </p>
+            <Button asChild>
+              <Link href="/">Back to Home</Link>
+            </Button>
+          </Card>
+        )}
       </div>
     </CustomerLayout>
   );

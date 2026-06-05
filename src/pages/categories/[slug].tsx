@@ -48,7 +48,6 @@ export default function CategoryDetailPage() {
         .single();
 
       if (categoryError || !categoryData) {
-        console.error("Category not found:", categoryError);
         setCategory(null);
         setProducts([]);
         setLoading(false);
@@ -82,26 +81,25 @@ export default function CategoryDetailPage() {
         .limit(48);
 
       if (productsError) {
-        console.error("Error fetching products:", productsError);
+        setProducts([]);
+      } else {
+        const formattedProducts = (productsData || []).map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          price: p.price,
+          compare_at_price: p.compare_at_price,
+          rating: p.rating || 4.5,
+          total_reviews: p.total_reviews || 0,
+          images: p.images || [],
+          seller: p.seller,
+        }));
+
+        setProducts(formattedProducts);
+        
+        // Update category product count
+        setCategory(prev => prev ? { ...prev, product_count: formattedProducts.length } : null);
       }
-
-      const formattedProducts = (productsData || []).map((p: any) => ({
-        id: p.id,
-        title: p.title,
-        price: p.price,
-        compare_at_price: p.compare_at_price,
-        rating: p.rating || 4.5,
-        total_reviews: p.total_reviews || 0,
-        images: p.images || [],
-        seller: p.seller,
-      }));
-
-      setProducts(formattedProducts);
-      
-      // Update category product count
-      setCategory(prev => prev ? { ...prev, product_count: formattedProducts.length } : null);
     } catch (error) {
-      console.error("Error fetching category:", error);
       setCategory(null);
       setProducts([]);
     } finally {
