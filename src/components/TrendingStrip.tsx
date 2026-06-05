@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TrendingProduct {
   id: string;
@@ -12,40 +14,47 @@ interface TrendingProduct {
   image: string;
 }
 
-const trendingProducts: TrendingProduct[] = [
-  {
-    id: "1",
-    title: "Wireless Earbuds Pro",
-    price: 149.99,
-    image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=100",
-  },
-  {
-    id: "2",
-    title: "Smart Watch Series 8",
-    price: 399.99,
-    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100",
-  },
-  {
-    id: "3",
-    title: "4K Action Camera",
-    price: 279.99,
-    image: "https://images.unsplash.com/photo-1606510907744-a6ec26c0ecfd?w=100",
-  },
-  {
-    id: "4",
-    title: "Gaming Headset RGB",
-    price: 129.99,
-    image: "https://images.unsplash.com/photo-1599669454699-248893623440?w=100",
-  },
-  {
-    id: "5",
-    title: "Portable SSD 1TB",
-    price: 159.99,
-    image: "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=100",
-  },
-];
-
 export function TrendingStrip() {
+  const [trendingProducts, setTrendingProducts] = useState<TrendingProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTrendingProducts();
+  }, []);
+
+  const fetchTrendingProducts = async () => {
+    try {
+      const { data } = await supabase
+        .from("products")
+        .select(`
+          id,
+          title,
+          price,
+          images:product_images(url)
+        `)
+        .eq("status", "approved")
+        .order("total_reviews", { ascending: false })
+        .limit(5);
+
+      if (data && data.length > 0) {
+        setTrendingProducts(data.map(p => ({
+          id: p.id,
+          title: p.title,
+          price: p.price,
+          image: (p.images as any)?.[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100",
+        })));
+      }
+    } catch (error) {
+      // Silent error handling
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || trendingProducts.length === 0) {
+    return null; // Don't show section if loading or no products
+  }
+
   return (
     <div className="bg-card border-y">
       <div className="container py-4">

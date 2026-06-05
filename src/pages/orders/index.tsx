@@ -70,13 +70,12 @@ export default function OrdersPage() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Error fetching orders:", error);
         setOrders([]);
       } else {
         setOrders(data || []);
       }
     } catch (error) {
-      console.error("Error:", error);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
