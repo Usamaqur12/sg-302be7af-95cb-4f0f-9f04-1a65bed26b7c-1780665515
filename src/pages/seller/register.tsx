@@ -121,14 +121,14 @@ export default function SellerRegisterPage() {
         user_id: authData.user.id,
         business_name: formData.shopName,
         business_description: formData.shopDescription,
-        business_type: formData.businessType as "individual" | "company" | "partnership",
+        business_type: formData.businessType,
         business_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
         commission_rate: 12,
         bank_account_number: formData.bankAccountNumber,
         bank_name: formData.bankName,
-        bank_routing_number: (formData.bankRoutingNumber || null) as string | null,
-        status: "pending" as "pending" | "approved" | "rejected" | "suspended",
-      });
+        bank_routing_number: formData.bankRoutingNumber || null,
+        status: "pending",
+      } as any);
 
       if (sellerProfileError) throw sellerProfileError;
 

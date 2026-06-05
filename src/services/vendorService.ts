@@ -22,13 +22,13 @@ export const vendorService = {
         user_id: userId,
         business_name: vendorData.business_name,
         business_description: vendorData.business_description,
-        business_type: vendorData.business_type as "individual" | "company" | "partnership",
+        business_type: vendorData.business_type,
         business_address: vendorData.business_address,
         bank_account_number: vendorData.bank_account_number,
         bank_name: vendorData.bank_name,
-        bank_routing_number: (vendorData.bank_routing_number || null) as string | null,
-        status: "pending" as "pending" | "approved" | "rejected" | "suspended",
-      })
+        bank_routing_number: vendorData.bank_routing_number || null,
+        status: "pending",
+      } as any)
       .select()
       .single();
 
