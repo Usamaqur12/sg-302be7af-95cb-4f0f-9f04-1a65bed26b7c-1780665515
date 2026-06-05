@@ -1,150 +1,102 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useEffect, useState } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import type { User } from "@supabase/supabase-js";
 
-interface UserProfile {
+interface Profile {
   id: string;
   email: string;
-  full_name: string | null;
-  phone: string | null;
   role: "customer" | "seller" | "admin";
-  created_at: string;
+  full_name?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  profile: UserProfile | null;
+  profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; message?: string; user?: User }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error?: any }>;
+  signUp: (email: string, password: string, fullName?: string) => Promise<{ error?: any }>;
   signOut: () => Promise<void>;
-  isAdmin: boolean;
-  isVendor: boolean;
-  isCustomer: boolean;
+  resetPassword: (email: string) => Promise<{ error?: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch user profile from database
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-
-      if (error) {
-        console.error("Profile fetch error:", error);
-        return null;
-      }
-
-      return data as UserProfile;
-    } catch (error) {
-      console.error("Profile fetch error:", error);
-      return null;
-    }
-  };
-
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const profileData = await fetchProfile(session.user.id);
-        setProfile(profileData);
-      }
-      
+    // Only run on client side
+    if (typeof window === "undefined") {
       setLoading(false);
+      return;
+    }
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
     });
 
-    // Listen for changes on auth state (logged in, signed out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      
       if (session?.user) {
-        const profileData = await fetchProfile(session.user.id);
-        setProfile(profileData);
+        fetchProfile(session.user.id);
       } else {
         setProfile(null);
+        setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, email, role, full_name")
+        .eq("id", userId)
+        .single();
 
-      if (error) {
-        return {
-          success: false,
-          message: error.message,
-        };
-      }
-
-      if (!data.user) {
-        return {
-          success: false,
-          message: "Login failed",
-        };
-      }
-
-      setUser(data.user);
-      
-      // Fetch profile
-      const profileData = await fetchProfile(data.user.id);
-      setProfile(profileData);
-
-      return {
-        success: true,
-        user: data.user,
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        message: error.message || "Login failed",
-      };
+      if (error) throw error;
+      setProfile(data as Profile);
+    } catch (error) {
+      setProfile(null);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, fullName?: string) => {
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          role: "customer",
         },
       },
     });
-
-    if (error) throw error;
-
-    if (data.user) {
-      // Create profile
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email,
-        full_name: fullName,
-        role: "customer",
-      });
-
-      if (profileError) throw profileError;
-    }
+    return { error };
   };
 
   const signOut = async () => {
@@ -153,22 +105,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   };
 
-  // Get user role from profile
-  const userRole = profile?.role || "customer";
-
-  const value = {
-    user,
-    profile,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    isAdmin: userRole === "admin",
-    isVendor: userRole === "seller",
-    isCustomer: userRole === "customer",
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/reset-password`,
+    });
+    return { error };
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        loading,
+        signIn,
+        signUp,
+        signOut,
+        resetPassword,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuthContext() {
