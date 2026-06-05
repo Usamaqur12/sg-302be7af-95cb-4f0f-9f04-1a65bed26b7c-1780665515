@@ -1,83 +1,59 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Smartphone, Laptop, Cpu, Camera, Home, Baby, Shirt, Headphones, Gem, Dumbbell } from "lucide-react";
+import { Smartphone, Laptop, Cpu, Camera, Home, Baby, Shirt, Headphones, Gem, Dumbbell, Package } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-const categories = [
-  {
-    id: "smartphone-tablet",
-    name: "Smartphone & Tablet",
-    slug: "smartphone-tablet",
-    icon: Smartphone,
-    image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=200&h=200&fit=crop",
-  },
-  {
-    id: "laptop",
-    name: "Laptop",
-    slug: "laptop",
-    icon: Laptop,
-    image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=200&h=200&fit=crop",
-  },
-  {
-    id: "electronics",
-    name: "Electronics",
-    slug: "electronics",
-    icon: Cpu,
-    image: "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=200&h=200&fit=crop",
-  },
-  {
-    id: "camera",
-    name: "Camera",
-    slug: "camera-photo",
-    icon: Camera,
-    image: "https://images.unsplash.com/photo-1606510907744-a6ec26c0ecfd?w=200&h=200&fit=crop",
-  },
-  {
-    id: "furniture",
-    name: "Furniture",
-    slug: "furniture-decor",
-    icon: Home,
-    image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=200&h=200&fit=crop",
-  },
-  {
-    id: "toys",
-    name: "Toys & Baby",
-    slug: "toys-kids-baby",
-    icon: Baby,
-    image: "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=200&h=200&fit=crop",
-  },
-  {
-    id: "fashion",
-    name: "Fashion",
-    slug: "fashion-accessories",
-    icon: Shirt,
-    image: "https://images.unsplash.com/photo-1445205170230-053b83016050?w=200&h=200&fit=crop",
-  },
-  {
-    id: "headphone",
-    name: "Audio",
-    slug: "headphone",
-    icon: Headphones,
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=200&fit=crop",
-  },
-  {
-    id: "jewellery",
-    name: "Jewellery",
-    slug: "jewellery",
-    icon: Gem,
-    image: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=200&h=200&fit=crop",
-  },
-  {
-    id: "sports",
-    name: "Sports",
-    slug: "sports-outdoors",
-    icon: Dumbbell,
-    image: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=200&h=200&fit=crop",
-  },
-];
+const iconMap: Record<string, any> = {
+  smartphone: Smartphone,
+  laptop: Laptop,
+  electronics: Cpu,
+  camera: Camera,
+  furniture: Home,
+  toys: Baby,
+  fashion: Shirt,
+  audio: Headphones,
+  jewellery: Gem,
+  sports: Dumbbell,
+};
 
 export function CategoryIconRow() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data } = await supabase
+        .from("categories")
+        .select("id, name, slug, image_url")
+        .limit(10);
+
+      if (data && data.length > 0) {
+        setCategories(data.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          slug: cat.slug,
+          image: cat.image_url || "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=200&h=200&fit=crop",
+          icon: iconMap[cat.slug.toLowerCase()] || Package,
+        })));
+      }
+    } catch (error) {
+      // Silent error handling
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || categories.length === 0) {
+    return null; // Don't show section if loading or no categories
+  }
+
   return (
     <section className="py-8 bg-background">
       <div className="container max-w-7xl">

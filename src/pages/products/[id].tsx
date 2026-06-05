@@ -62,7 +62,6 @@ export default function ProductDetailPage() {
         .single();
 
       if (productError || !productData) {
-        console.error("Product not found:", productError);
         setNotFound(true);
         setLoading(false);
         return;
@@ -97,7 +96,6 @@ export default function ProductDetailPage() {
         setRelatedProducts(relatedData || []);
       }
     } catch (error) {
-      console.error("Error fetching product:", error);
       setNotFound(true);
     } finally {
       setLoading(false);
