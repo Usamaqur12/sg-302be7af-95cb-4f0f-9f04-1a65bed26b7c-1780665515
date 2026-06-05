@@ -69,7 +69,6 @@ export const orderService = {
       .insert({
         order_number: orderNumber,
         customer_id: orderData.customer_id,
-        // @ts-expect-error - Supabase type generator limitation, runtime value is correct
         status: "pending",
         total: total,
         subtotal: subtotal,
@@ -158,7 +157,7 @@ export const orderService = {
   /**
    * Update order status
    */
-  updateOrderStatus: async (orderId: string, status: string) => {
+  updateOrderStatus: async (orderId: string, status: "pending" | "confirmed" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded") => {
     const { data, error } = await supabase
       .from("orders")
       .update({ status })
