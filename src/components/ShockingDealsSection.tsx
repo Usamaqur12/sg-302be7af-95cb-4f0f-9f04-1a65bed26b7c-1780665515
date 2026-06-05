@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
+import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CountdownTimer } from "./CountdownTimer";
 import { DealProductCard } from "./DealProductCard";
 import { Zap, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
 
 interface DealProduct {
   id: string;
@@ -180,16 +184,13 @@ export function ShockingDealsSection() {
                       <p className="text-xl lg:text-2xl font-bold text-white/90 mt-2">OFF</p>
                     </div>
 
-                    <Button 
-                      size="lg" 
-                      className="bg-white hover:bg-white/90 text-accent font-bold shadow-xl hover:shadow-2xl transition-all hover:scale-105 mt-4"
-                      asChild
-                    >
-                      <a href="/deals">
-                        Shop Deals
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </a>
-                    </Button>
+                    <div className="flex justify-center mt-8">
+                      <Link href="/deals">
+                        <Button size="lg" variant="outline">
+                          View All Deals
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
 
