@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -22,53 +23,37 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const response = await signIn(email, password);
+      const { error } = await signIn(email, password);
 
-      if (!response?.success || !response?.user) {
-        throw new Error(response?.message || "Login failed");
-      }
-
-      const user = response.user;
-
-      // Get user profile to verify they are an admin
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError || profile?.role !== "admin") {
+      if (error) {
         toast({
-          title: "Access Denied",
-          description: "This account does not have admin privileges",
+          title: "Error",
+          description: error.message || "Invalid credentials",
           variant: "destructive",
         });
-        await signOut();
-        setLoading(false);
         return;
       }
 
+      // Success - wait for profile to load and check role
       toast({
-        title: "Admin Access Granted",
-        description: "Welcome to the admin dashboard.",
+        title: "Success",
+        description: "Logged in successfully",
       });
 
-      // Use setTimeout to ensure state updates complete before navigation
-      setTimeout(() => {
-        router.push("/admin");
-      }, 100);
+      // AuthContext will fetch profile, then redirect via useEffect
+      router.push("/admin");
     } catch (error: any) {
-      console.error("Admin login error:", error);
       toast({
-        title: "Login Failed",
-        description: error?.message || "Invalid credentials",
+        title: "Error",
+        description: error.message || "Login failed",
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
     }
   };

@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -22,78 +23,37 @@ export default function SellerLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const response = await signIn(email, password);
+      const { error } = await signIn(email, password);
 
-      if (!response?.success || !response?.user) {
-        throw new Error(response?.message || "Login failed");
-      }
-
-      const user = response.user;
-
-      // Get user profile to verify they are a vendor
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError || profile?.role !== "seller") {
+      if (error) {
         toast({
-          title: "Access Denied",
-          description: "This account is not registered as a seller",
+          title: "Error",
+          description: error.message || "Invalid credentials",
           variant: "destructive",
         });
-        await signOut();
-        setLoading(false);
         return;
       }
 
-      // Get seller profile to check verification status
-      const { data: sellerProfile, error: sellerError } = await supabase
-        .from("seller_profiles")
-        .select("status")
-        .eq("user_id", user.id)
-        .single();
-
-      if (sellerError) {
-        console.error("Seller profile fetch error:", sellerError);
-      }
-
+      // Success - wait for profile to load
       toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
+        title: "Success",
+        description: "Logged in successfully",
       });
 
-      // Check seller status and redirect accordingly
-      setTimeout(() => {
-        const status = sellerProfile?.status;
-        
-        if (status === "pending" || !status) {
-          router.push("/seller/pending-approval");
-        } else if (status === "suspended" || status === "rejected") {
-          toast({
-            title: "Account Suspended",
-            description: "Your seller account has been suspended. Contact support for assistance.",
-            variant: "destructive",
-          });
-          signOut();
-          setLoading(false);
-        } else {
-          router.push("/seller");
-        }
-      }, 100);
+      // AuthContext will fetch profile, then redirect
+      router.push("/seller");
     } catch (error: any) {
-      console.error("Seller login error:", error);
       toast({
-        title: "Login Failed",
-        description: error?.message || "Invalid email or password",
+        title: "Error",
+        description: error.message || "Login failed",
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
     }
   };

@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -23,53 +24,40 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const response = await signIn(email, password);
+      const { error } = await signIn(email, password);
 
-      if (!response?.success || !response?.user) {
-        throw new Error(response?.message || "Login failed");
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message || "Invalid email or password",
+          variant: "destructive",
+        });
+        return;
       }
 
-      const user = response.user;
-
-      // Get user profile to check role and status
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) {
-        console.error("Profile fetch error:", profileError);
-        // Continue with login even if profile fetch fails
-      }
-
+      // Success - AuthContext will handle profile fetch and navigation happens via useEffect
       toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
+        title: "Success",
+        description: "Logged in successfully",
       });
 
-      // Redirect based on role
-      setTimeout(() => {
-        const userRole = profile?.role || user.user_metadata?.role || "customer";
-        
-        if (userRole === "admin") {
-          router.push("/admin");
-        } else if (userRole === "vendor") {
-          router.push("/seller");
-        } else {
-          router.push("/account/dashboard");
-        }
-      }, 100);
+      // Redirect based on role after profile is loaded
+      if (profile?.role === "admin") {
+        router.push("/admin");
+      } else if (profile?.role === "seller") {
+        router.push("/seller");
+      } else {
+        router.push("/");
+      }
     } catch (error: any) {
-      console.error("Login error:", error);
       toast({
-        title: "Login Failed",
-        description: error?.message || "Invalid email or password",
+        title: "Error",
+        description: error.message || "Something went wrong",
         variant: "destructive",
       });
     } finally {
