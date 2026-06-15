@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { csrfHeaders } from "@/lib/csrf";
 
 interface Profile {
   id: string;
@@ -50,6 +51,7 @@ async function requestJson<T>(url: string, options: RequestInit = {}): Promise<T
     return await readJsonResponse<T>(
       await fetch(url, {
         ...options,
+        headers: csrfHeaders(options.headers),
         signal: controller?.signal,
       })
     );
@@ -63,11 +65,12 @@ async function requestJson<T>(url: string, options: RequestInit = {}): Promise<T
       xhr.open(options.method || "GET", url);
       xhr.withCredentials = options.credentials === "include";
 
-      const headers = options.headers instanceof Headers
-        ? Array.from(options.headers.entries())
-        : Array.isArray(options.headers)
-          ? options.headers
-          : Object.entries(options.headers || {});
+      const safeHeaders = csrfHeaders(options.headers);
+      const headers = safeHeaders instanceof Headers
+        ? Array.from(safeHeaders.entries())
+        : Array.isArray(safeHeaders)
+          ? safeHeaders
+          : Object.entries(safeHeaders || {});
 
       headers.forEach(([key, value]) => xhr.setRequestHeader(key, String(value)));
 

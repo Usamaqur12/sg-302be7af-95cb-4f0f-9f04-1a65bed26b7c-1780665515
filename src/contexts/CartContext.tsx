@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { csrfHeaders } from "@/lib/csrf";
 
 interface CartItem {
   id: string;
@@ -78,7 +79,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const nextItems = await readCart(
       await fetch("/api/cart", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: csrfHeaders({ "Content-Type": "application/json" }),
         credentials: "include",
         body: JSON.stringify({ productId, quantity }),
       })
@@ -90,7 +91,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const nextItems = await readCart(
       await fetch("/api/cart", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: csrfHeaders({ "Content-Type": "application/json" }),
         credentials: "include",
         body: JSON.stringify({ itemId, quantity }),
       })
@@ -102,6 +103,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const nextItems = await readCart(
       await fetch(`/api/cart?itemId=${encodeURIComponent(itemId)}`, {
         method: "DELETE",
+        headers: csrfHeaders(),
         credentials: "include",
       })
     );
@@ -113,6 +115,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const nextItems = await readCart(
       await fetch("/api/cart?clear=true", {
         method: "DELETE",
+        headers: csrfHeaders(),
         credentials: "include",
       })
     );

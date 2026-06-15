@@ -104,12 +104,14 @@ Implementation now added in `next.config.mjs`:
 - optional `ALLOWED_IMAGE_HOSTS` / `NEXT_PUBLIC_ALLOWED_IMAGE_HOSTS`
 - local dev hosts
 
-### Blocker 5: CSRF Protection (Partially Implemented)
+### Blocker 5: CSRF Protection (Implemented for Authenticated APIs)
 
 - Added `src/middleware.ts` with middleware-enforced origin validation for non-safe methods under `/api/*`.
 - In production, state-changing requests without `Origin` are now rejected.
 - Production browser/API cross-site POST/PUT/PATCH/DELETE calls from unapproved origins are rejected with 403.
-- CSRF token issuance/rotation is still not implemented (token-based CSRF remains a launch-hardening follow-up).
+- Added a double-submit CSRF token cookie and `X-CSRF-Token` validation for authenticated non-safe API requests.
+- Added `src/lib/csrf.ts` and wired token headers through the auth wrapper, Supabase-shaped data adapter, uploads, cart mutations, and checkout order creation.
+- Public unauthenticated POST endpoints remain origin-gated but token-exempt: login, registration, seller registration, order tracking, promotion summaries, and marketing tracking.
 
 ## Verification
 
@@ -136,6 +138,21 @@ Implemented directly from this heartbeat:
   - `Content-Security-Policy`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and baseline cross-origin controls are now active.
   - `images.remotePatterns` is now allowlist-based (`images.unsplash.com` + configured hosts + app host), no longer `**`.
 - Added `src/middleware.ts` to reject non-safe API mutations (`POST`/`PUT`/`PATCH`/`DELETE`) from disallowed origins.
+
+## Resume Update (2026-06-16)
+
+Implemented directly from this heartbeat:
+
+- Added `src/lib/csrf.ts` with shared CSRF cookie/header helpers.
+- Updated `src/lib/server/session.ts` to issue and clear a readable `mercato_csrf` cookie alongside the HTTP-only session cookie.
+- Updated `src/middleware.ts` to require `X-CSRF-Token` to match `mercato_csrf` whenever a `mercato_session` cookie is present on protected non-safe API routes.
+- Updated protected browser request paths to send the token:
+  - `src/contexts/AuthContext.tsx`
+  - `src/integrations/supabase/client.ts`
+  - `src/lib/uploads.ts`
+  - `src/contexts/CartContext.tsx`
+  - `src/pages/checkout.tsx`
+  - `src/pages/admin/users.tsx` (admin user creation)
 
 Current blockers:
 

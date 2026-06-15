@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { randomUUID } from "node:crypto";
 import { parse, serialize } from "cookie";
 import { jwtVerify, SignJWT } from "jose";
+import { CSRF_COOKIE_NAME } from "@/lib/csrf";
 
 export type MarketplaceRole = "customer" | "seller" | "admin" | "manager" | "warehouse";
 
@@ -80,27 +82,46 @@ export async function readSession(req: NextApiRequest): Promise<SessionUser | nu
 }
 
 export function setSessionCookie(res: NextApiResponse, token: string) {
+  const csrfToken = randomUUID();
   res.setHeader(
     "Set-Cookie",
-    serialize(COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: shouldUseSecureCookie(),
-      sameSite: "lax",
-      path: "/",
-      maxAge: SESSION_DURATION_SECONDS,
-    })
+    [
+      serialize(COOKIE_NAME, token, {
+        httpOnly: true,
+        secure: shouldUseSecureCookie(),
+        sameSite: "lax",
+        path: "/",
+        maxAge: SESSION_DURATION_SECONDS,
+      }),
+      serialize(CSRF_COOKIE_NAME, csrfToken, {
+        httpOnly: false,
+        secure: shouldUseSecureCookie(),
+        sameSite: "lax",
+        path: "/",
+        maxAge: SESSION_DURATION_SECONDS,
+      }),
+    ]
   );
 }
 
 export function clearSessionCookie(res: NextApiResponse) {
   res.setHeader(
     "Set-Cookie",
-    serialize(COOKIE_NAME, "", {
-      httpOnly: true,
-      secure: shouldUseSecureCookie(),
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    })
+    [
+      serialize(COOKIE_NAME, "", {
+        httpOnly: true,
+        secure: shouldUseSecureCookie(),
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0,
+      }),
+      serialize(CSRF_COOKIE_NAME, "", {
+        httpOnly: false,
+        secure: shouldUseSecureCookie(),
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0,
+      }),
+    ]
   );
 }
