@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { useState, FormEvent, useEffect } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { CustomerLayout } from "@/components/CustomerLayout";
@@ -11,12 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/errors";
 import { Eye, EyeOff, Loader2, ShoppingBag } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, profile } = useAuthContext();
+  const { signIn } = useAuthContext();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -24,47 +24,35 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Redirect based on role after successful login
-  useEffect(() => {
-    if (profile) {
-      if (profile.role === "admin") {
-        router.push("/admin");
-      } else if (profile.role === "seller") {
-        router.push("/seller");
-      } else {
-        router.push("/");
-      }
-    }
-  }, [profile, router]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
     setLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      const result = await signIn(email.trim().toLowerCase(), password);
 
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message || "Invalid email or password",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
+      if (result.error) throw result.error;
 
-      // Success - useEffect will handle redirect after profile loads
       toast({
-        title: "Success",
-        description: "Logged in successfully",
+        title: "Welcome back",
+        description: "You are signed in.",
       });
-    } catch (error: any) {
+
+      const destination =
+        result.profile?.role === "admin"
+          ? "/admin"
+          : result.profile?.role === "seller"
+            ? "/seller"
+            : "/";
+      await router.replace(destination);
+    } catch (error: unknown) {
       toast({
-        title: "Error",
-        description: error.message || "Something went wrong",
+        title: "Sign-in failed",
+        description: getErrorMessage(error, "Check your email and password."),
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
     }
   };
@@ -78,7 +66,7 @@ export default function LoginPage() {
               <ShoppingBag className="h-12 w-12 text-primary" />
             </div>
             <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-            <CardDescription>Log in to your customer account</CardDescription>
+            <CardDescription>Sign in to your Mercato account</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -90,6 +78,7 @@ export default function LoginPage() {
                   placeholder="customer@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
                   required
                 />
               </div>
@@ -103,11 +92,14 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                    className="pr-10"
                     required
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={() => setShowPassword((current) => !current)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -157,11 +149,6 @@ export default function LoginPage() {
                 </Link>
               </div>
 
-              <div className="bg-muted/50 p-4 rounded-lg text-xs space-y-2">
-                <p className="font-semibold">Demo Customer Account:</p>
-                <p>Email: customer@marketplace.com</p>
-                <p>Password: Customer@123</p>
-              </div>
             </form>
           </CardContent>
         </Card>

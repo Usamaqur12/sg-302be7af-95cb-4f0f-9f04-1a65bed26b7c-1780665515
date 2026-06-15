@@ -1,116 +1,89 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Search, X, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Package, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
+import { supabase } from "@/integrations/supabase/client";
+import { amazonStyleCategories } from "@/lib/marketplace-config";
 
-// Mock products for search
-const MOCK_PRODUCTS = [
-  {
-    id: "deal-1",
-    title: "iPhone 15 Pro Max 256GB",
-    price: 999.99,
-    image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=100&h=100&fit=crop",
-    category: "Smartphone",
-  },
-  {
-    id: "deal-2",
-    title: "Samsung Galaxy S24 Ultra",
-    price: 899.99,
-    image: "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=100&h=100&fit=crop",
-    category: "Smartphone",
-  },
-  {
-    id: "deal-3",
-    title: "iPad Pro 12.9-inch M2",
-    price: 799.99,
-    image: "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=100&h=100&fit=crop",
-    category: "Tablet",
-  },
-  {
-    id: "deal-5",
-    title: "MacBook Pro 14-inch M3",
-    price: 1599.99,
-    image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=100&h=100&fit=crop",
-    category: "Laptop",
-  },
-  {
-    id: "deal-6",
-    title: "Dell XPS 15 Ultra Thin",
-    price: 1299.99,
-    image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=100&h=100&fit=crop",
-    category: "Laptop",
-  },
-  {
-    id: "deal-9",
-    title: "Sony WH-1000XM5 Headphones",
-    price: 299.99,
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&h=100&fit=crop",
-    category: "Audio",
-  },
-  {
-    id: "1",
-    title: "Premium Wireless Headphones",
-    price: 249.99,
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&h=100&fit=crop",
-    category: "Audio",
-  },
-  {
-    id: "2",
-    title: "Smart Watch Series X",
-    price: 349.99,
-    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&h=100&fit=crop",
-    category: "Wearables",
-  },
-];
-
-const TRENDING_SEARCHES = [
-  "iPhone 15",
-  "MacBook Pro",
-  "Wireless Headphones",
-  "Smart Watch",
-  "iPad",
-];
+interface SearchProduct {
+  id: string;
+  title: string;
+  price: number;
+  category: { name: string } | null;
+  images: { url: string }[];
+}
 
 interface SearchBarProps {
   onClose?: () => void;
+  compact?: boolean;
 }
 
-export function SearchBar({ onClose }: SearchBarProps) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<typeof MOCK_PRODUCTS>([]);
-  const [showResults, setShowResults] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+const searchDepartments = [
+  { label: "All", value: "all" },
+  { label: "Deals", value: "deals" },
+  ...amazonStyleCategories.slice(0, 8).map((category) => ({
+    label: category.name,
+    value: category.slug,
+  })),
+];
 
-  // Real-time search filtering
+export function SearchBar({ onClose, compact = false }: SearchBarProps) {
+  const router = useRouter();
+  const { siteName, formatPrice } = useMarketplaceSettings();
+  const searchRef = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState("");
+  const [department, setDepartment] = useState("all");
+  const [results, setResults] = useState<SearchProduct[]>([]);
+  const [showResults, setShowResults] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
-    if (query.trim().length === 0) {
+    const search = query.trim();
+    if (search.length < 2) {
       setResults([]);
+      setLoading(false);
       return;
     }
 
-    const searchTerm = query.toLowerCase();
-    const filtered = MOCK_PRODUCTS.filter(
-      (product) =>
-        product.title.toLowerCase().includes(searchTerm) ||
-        product.category.toLowerCase().includes(searchTerm)
-    ).slice(0, 6); // Limit to 6 results
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      const safeSearch = search.replaceAll(",", " ");
+      const { data } = await supabase
+        .from("products")
+        .select(`
+          id,
+          title,
+          price,
+          category:categories(name),
+          images:product_images(url)
+        `)
+        .eq("status", "approved")
+        .or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`)
+        .limit(6);
 
-    setResults(filtered);
+      if (active) {
+        setResults((data ?? []) as unknown as SearchProduct[]);
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [query]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setShowResults(false);
-        setIsFocused(false);
       }
     };
 
@@ -118,49 +91,57 @@ export function SearchBar({ onClose }: SearchBarProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim()) {
-      router.push(`/search?q=${encodeURIComponent(query)}`);
-      setShowResults(false);
-      setQuery("");
-      onClose?.();
-    }
-  };
-
-  const handleTrendingClick = (term: string) => {
-    setQuery(term);
-    router.push(`/search?q=${encodeURIComponent(term)}`);
-    setShowResults(false);
-    onClose?.();
-  };
-
-  const handleProductClick = () => {
+  const closeSearch = () => {
     setShowResults(false);
     setQuery("");
     onClose?.();
   };
 
+  const handleSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const search = query.trim();
+    if (!search) return;
+
+    router.push(`/search?q=${encodeURIComponent(search)}`);
+    closeSearch();
+  };
+
   return (
     <div ref={searchRef} className="relative w-full">
-      <form onSubmit={handleSearch} className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+      <form
+        onSubmit={handleSearch}
+        className={`relative flex ${compact ? "h-10" : "h-11"} overflow-hidden rounded-md border-2 border-transparent bg-background shadow-sm transition focus-within:border-accent`}
+      >
+        <label className="sr-only" htmlFor="marketplace-department">
+          Search department
+        </label>
+        <select
+          id="marketplace-department"
+          value={department}
+          onChange={(event) => setDepartment(event.target.value)}
+          className="hidden w-28 shrink-0 border-r bg-muted px-3 text-xs font-medium text-foreground outline-none md:block"
+        >
+          {searchDepartments.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground md:left-32" />
         <Input
           type="search"
-          placeholder="Search for products, brands, and more..."
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => {
-            setIsFocused(true);
-            setShowResults(true);
-          }}
-          className="pl-10 pr-20"
+          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => setShowResults(true)}
+          placeholder={`Search ${siteName}`}
+          className="h-full flex-1 rounded-none border-0 bg-background pl-10 pr-20 shadow-none focus-visible:ring-0 md:pl-10"
         />
         {query && (
           <button
             type="button"
+            aria-label="Clear search"
             onClick={() => setQuery("")}
-            className="absolute right-12 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-14 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>
@@ -168,77 +149,59 @@ export function SearchBar({ onClose }: SearchBarProps) {
         <Button
           type="submit"
           size="sm"
-          className="absolute right-0 top-0 h-full rounded-l-none"
+          className="h-full w-12 shrink-0 rounded-none bg-accent text-accent-foreground hover:bg-accent/90"
         >
           <Search className="h-4 w-4" />
+          <span className="sr-only">Search</span>
         </Button>
       </form>
 
-      {/* Search Results Dropdown */}
-      {showResults && (isFocused || results.length > 0) && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-card border rounded-lg shadow-xl z-50 max-h-[500px] overflow-hidden">
-          {results.length > 0 ? (
+      {showResults && query.trim().length >= 2 && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[460px] overflow-y-auto rounded-md border bg-card shadow-xl">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Searching...
+            </div>
+          ) : results.length === 0 ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">No products found.</p>
+          ) : (
             <div className="p-2">
-              <div className="text-xs font-semibold text-muted-foreground px-3 py-2">
-                Products
-              </div>
-              <div className="space-y-1">
-                {results.map((product) => (
-                  <Link
-                    key={product.id}
-                    href={`/products/${product.id}`}
-                    onClick={handleProductClick}
-                    className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors"
-                  >
-                    <div className="relative w-12 h-12 flex-shrink-0 rounded-md overflow-hidden bg-muted border">
+              {results.map((product) => (
+                <Link
+                  key={product.id}
+                  href={`/products/${product.id}`}
+                  onClick={closeSearch}
+                  className="flex items-center gap-3 rounded-md p-2 hover:bg-muted"
+                >
+                  <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                    {product.images[0]?.url ? (
                       <Image
-                        src={product.image}
-                        alt={product.title}
+                        src={product.images[0].url}
+                        alt=""
                         fill
+                        unoptimized
                         className="object-cover"
                       />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-tight line-clamp-1">
-                        {product.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{product.category}</p>
-                    </div>
-                    <span className="text-sm font-bold font-mono">${product.price}</span>
-                  </Link>
-                ))}
-              </div>
-              {results.length >= 6 && (
-                <Link
-                  href={`/search?q=${encodeURIComponent(query)}`}
-                  onClick={handleProductClick}
-                  className="block text-center text-sm text-accent hover:underline py-3"
-                >
-                  View all results for "{query}"
+                    ) : (
+                      <Package className="h-5 w-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{product.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {product.category?.name || "Marketplace"}
+                    </p>
+                  </div>
+                  <span className="font-mono text-sm font-bold">{formatPrice(product.price)}</span>
                 </Link>
-              )}
-            </div>
-          ) : query.trim().length > 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-sm text-muted-foreground">No products found for "{query}"</p>
-            </div>
-          ) : (
-            <div className="p-4">
-              <div className="text-xs font-semibold text-muted-foreground px-2 py-2 flex items-center gap-2">
-                <TrendingUp className="h-3.5 w-3.5" />
-                Trending Searches
-              </div>
-              <div className="space-y-1">
-                {TRENDING_SEARCHES.map((term) => (
-                  <button
-                    key={term}
-                    onClick={() => handleTrendingClick(term)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-md transition-colors"
-                  >
-                    {term}
-                  </button>
-                ))}
-              </div>
+              ))}
+              <Link
+                href={`/search?q=${encodeURIComponent(query.trim())}`}
+                onClick={closeSearch}
+                className="block border-t py-3 text-center text-sm font-medium text-primary hover:underline"
+              >
+                View all results
+              </Link>
             </div>
           )}
         </div>

@@ -1,6 +1,10 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+export function isEmailConfigured() {
+  return Boolean(process.env.RESEND_API_KEY);
+}
 
 export const emailService = {
   /**
@@ -19,9 +23,12 @@ export const emailService = {
     orderDate: string;
   }) {
     try {
+      if (!isEmailConfigured()) return;
+      const emailClient = resend;
+      if (!emailClient) return;
       const { to, customerName, orderNumber, orderTotal, orderItems, orderDate } = data;
 
-      await resend.emails.send({
+      await emailClient.emails.send({
         from: "Marketplace <orders@yourdomain.com>",
         to,
         subject: `Order Confirmation - ${orderNumber}`,
@@ -102,10 +109,13 @@ export const emailService = {
     reason?: string;
   }) {
     try {
+      if (!isEmailConfigured()) return;
+      const emailClient = resend;
+      if (!emailClient) return;
       const { to, businessName, status, reason } = data;
 
       if (status === "approved") {
-        await resend.emails.send({
+        await emailClient.emails.send({
           from: "Marketplace <admin@yourdomain.com>",
           to,
           subject: "🎉 Your Seller Account Has Been Approved!",
@@ -163,7 +173,7 @@ export const emailService = {
           `,
         });
       } else {
-        await resend.emails.send({
+        await emailClient.emails.send({
           from: "Marketplace <admin@yourdomain.com>",
           to,
           subject: "Update on Your Seller Application",
@@ -228,10 +238,13 @@ export const emailService = {
     adminNotes?: string;
   }) {
     try {
+      if (!isEmailConfigured()) return;
+      const emailClient = resend;
+      if (!emailClient) return;
       const { to, businessName, amount, status, requestDate, processedDate, adminNotes } = data;
 
       if (status === "completed") {
-        await resend.emails.send({
+        await emailClient.emails.send({
           from: "Marketplace <payouts@yourdomain.com>",
           to,
           subject: `Payout Completed - $${amount.toFixed(2)}`,
@@ -278,7 +291,7 @@ export const emailService = {
           `,
         });
       } else {
-        await resend.emails.send({
+        await emailClient.emails.send({
           from: "Marketplace <payouts@yourdomain.com>",
           to,
           subject: "Payout Request Update",
@@ -353,9 +366,12 @@ export const emailService = {
     }>;
   }) {
     try {
+      if (!isEmailConfigured()) return;
+      const emailClient = resend;
+      if (!emailClient) return;
       const { to, businessName, orderNumber, customerName, orderTotal, orderItems } = data;
 
-      await resend.emails.send({
+      await emailClient.emails.send({
         from: "Marketplace <orders@yourdomain.com>",
         to,
         subject: `New Order Received - ${orderNumber}`,

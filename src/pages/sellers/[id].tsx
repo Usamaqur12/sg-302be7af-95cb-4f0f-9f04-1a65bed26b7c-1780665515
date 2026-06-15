@@ -32,6 +32,7 @@ interface Product {
   title: string;
   price: number;
   compare_at_price: number | null;
+  deal_expires_at: string | null;
   rating: number;
   total_reviews: number;
   images: { url: string }[];
@@ -74,6 +75,7 @@ export default function SellerStorePage() {
           title,
           price,
           compare_at_price,
+          deal_expires_at,
           rating,
           total_reviews,
           images:product_images(url),
@@ -250,6 +252,7 @@ export default function SellerStorePage() {
                       rating={product.rating}
                       reviewCount={product.total_reviews}
                       sellerName={seller.business_name}
+                      dealExpiresAt={product.deal_expires_at}
                     />
                   ))}
                 </div>

@@ -3,6 +3,12 @@ import { createRequire } from "module";
 
 // Check if element-tagger is available
 function isElementTaggerAvailable() {
+  const enabled =
+    process.env.NEXT_PUBLIC_ENABLE_SOFTGEN_SCRIPTS === "true" &&
+    process.env.NEXT_PUBLIC_ENABLE_ELEMENT_TAGGER === "true";
+
+  if (!enabled) return false;
+
   try {
     const require = createRequire(import.meta.url);
     require.resolve("@softgenai/element-tagger");
@@ -29,6 +35,8 @@ function getTurboRules() {
 
 const nextConfig = {
   reactStrictMode: true,
+  distDir: process.env.NEXT_DIST_DIR || ".next-build",
+  serverExternalPackages: ["mysql2"],
   turbopack: {
     rules: getTurboRules(),
   },

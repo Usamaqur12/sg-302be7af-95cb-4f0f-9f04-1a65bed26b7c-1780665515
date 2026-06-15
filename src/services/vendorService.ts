@@ -9,11 +9,12 @@ export const vendorService = {
     vendorData: {
       business_name: string;
       business_description: string;
-      business_type: "individual" | "company" | "partnership";
       business_address: string;
+      business_email: string;
+      business_phone: string;
+      bank_account_name: string;
       bank_account_number: string;
       bank_name: string;
-      bank_routing_number?: string;
     }
   ) => {
     const { data, error } = await supabase
@@ -22,13 +23,14 @@ export const vendorService = {
         user_id: userId,
         business_name: vendorData.business_name,
         business_description: vendorData.business_description,
-        business_type: vendorData.business_type,
         business_address: vendorData.business_address,
+        business_email: vendorData.business_email,
+        business_phone: vendorData.business_phone,
+        bank_account_name: vendorData.bank_account_name,
         bank_account_number: vendorData.bank_account_number,
         bank_name: vendorData.bank_name,
-        bank_routing_number: vendorData.bank_routing_number || null,
         status: "pending",
-      } as any)
+      })
       .select()
       .single();
 

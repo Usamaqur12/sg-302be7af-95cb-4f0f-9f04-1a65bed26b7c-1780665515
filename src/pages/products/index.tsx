@@ -43,6 +43,7 @@ export default function ProductsPage() {
           slug,
           price,
           compare_at_price,
+          deal_expires_at,
           rating,
           total_reviews,
           category_id,
@@ -184,6 +185,7 @@ export default function ProductsPage() {
                 title={product.title}
                 price={product.price}
                 compareAtPrice={product.compare_at_price}
+                dealExpiresAt={product.deal_expires_at}
                 image={
                   product.images?.[0]?.url ||
                   "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"

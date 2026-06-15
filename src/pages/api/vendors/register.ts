@@ -1,49 +1,132 @@
+import { randomUUID } from "node:crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
-import { successResponse, errorResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api-response";
-import { vendorService } from "@/services/vendorService";
-import { validateSchema, createVendorSchema } from "@/lib/validation";
-import { supabase } from "@/integrations/supabase/client";
+import bcrypt from "bcryptjs";
+import type { RowDataPacket } from "mysql2";
+import {
+  errorResponse,
+  successResponse,
+  validationErrorResponse,
+} from "@/lib/api-response";
+import { canUseLocalDevAuthFallback, withTransaction } from "@/lib/server/db";
+import { createLocalSeller, type LocalSellerRegistrationInput } from "@/lib/server/local-db";
+import { sellerRegistrationSchema, validateSchema } from "@/lib/validation";
+import { getErrorMessage } from "@/lib/errors";
+
+interface ExistingUserRow extends RowDataPacket {
+  id: string;
+}
+
+interface SettingRow extends RowDataPacket {
+  value: string | number | null;
+}
+
+function parseCommission(value: string | number | null | undefined) {
+  if (typeof value === "number") return value;
+  if (!value) return 15;
+
+  try {
+    const parsed = JSON.parse(value);
+    const numeric = Number(parsed);
+    return Number.isFinite(numeric) ? numeric : 15;
+  } catch {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : 15;
+  }
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
     return res.status(405).json(errorResponse("Method not allowed"));
   }
 
+  const validation = validateSchema(sellerRegistrationSchema, req.body);
+
+  if (!validation.success || !validation.data) {
+    return res
+      .status(400)
+      .json(validationErrorResponse(validation.errors ?? []));
+  }
+
+  const input = validation.data as LocalSellerRegistrationInput;
+
   try {
-    // Get user from session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return res.status(401).json(unauthorizedResponse());
+    if (canUseLocalDevAuthFallback()) {
+      const sellerProfile = await createLocalSeller(input);
+      return res.status(201).json(
+        successResponse("Seller application submitted successfully", {
+          sellerProfileId: sellerProfile.id,
+          status: sellerProfile.status,
+          emailConfirmationRequired: false,
+        })
+      );
     }
 
-    // Validate input
-    const validation = validateSchema(createVendorSchema, req.body);
-    
-    if (!validation.success) {
-      return res.status(400).json(validationErrorResponse(validation.errors!));
-    }
+    const result = await withTransaction(async (connection) => {
+      const email = input.email.trim().toLowerCase();
+      const [existingRows] = await connection.execute<ExistingUserRow[]>(
+        "SELECT id FROM profiles WHERE email = ? LIMIT 1",
+        [email]
+      );
 
-    // Check if user already has a vendor profile
-    const existing = await vendorService.getVendorByUserId(user.id);
-    if (existing) {
-      return res.status(400).json(errorResponse("Vendor profile already exists"));
-    }
+      if (existingRows.length) {
+        throw new Error("An account with this email already exists");
+      }
 
-    // Register vendor
-    const vendorData = await vendorService.registerVendor(user.id, {
-      business_name: validation.data!.business_name,
-      business_description: validation.data!.description || "",
-      business_type: validation.data!.business_type,
-      business_address: validation.data!.business_address,
-      bank_account_number: validation.data!.bank_account_number,
-      bank_name: validation.data!.bank_name,
-      bank_routing_number: validation.data!.bank_routing_number,
+      const [settingsRows] = await connection.execute<SettingRow[]>(
+        "SELECT JSON_UNQUOTE(value) AS value FROM system_settings WHERE `key` = 'default_commission_rate' LIMIT 1"
+      );
+      const commissionRate = parseCommission(settingsRows[0]?.value);
+      const userId = randomUUID();
+      const sellerProfileId = randomUUID();
+      const passwordHash = await bcrypt.hash(input.password, 12);
+
+      await connection.execute(
+        `INSERT INTO profiles
+         (id, email, password_hash, full_name, phone, role, is_active)
+         VALUES (?, ?, ?, ?, ?, 'seller', 1)`,
+        [userId, email, passwordHash, input.full_name, input.phone]
+      );
+
+      await connection.execute(
+        `INSERT INTO seller_profiles
+         (
+           id, user_id, business_name, business_description, business_address,
+           business_email, business_phone, bank_account_name, bank_account_number,
+           bank_name, owner_full_name, pickup_address, return_address, commission_rate, status
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        [
+          sellerProfileId,
+          userId,
+          input.business_name,
+          input.description,
+          input.business_address,
+          input.business_email,
+          input.business_phone,
+          input.bank_account_name,
+          input.bank_account_number,
+          input.bank_name,
+          input.full_name,
+          input.business_address,
+          input.business_address,
+          commissionRate,
+        ]
+      );
+
+      return { sellerProfileId };
     });
 
-    return res.status(201).json(successResponse("Vendor registered successfully", vendorData));
-  } catch (error: any) {
-    console.error("Vendor registration error:", error);
-    return res.status(500).json(errorResponse(error.message || "Internal server error"));
+    return res.status(201).json(
+      successResponse("Seller application submitted successfully", {
+        sellerProfileId: result.sellerProfileId,
+        status: "pending",
+        emailConfirmationRequired: false,
+      })
+    );
+  } catch (error: unknown) {
+    const message = getErrorMessage(error, "Could not create seller account");
+    const status = message.includes("already exists") ? 409 : 500;
+    return res.status(status).json(errorResponse(message));
   }
 }

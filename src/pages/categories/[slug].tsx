@@ -71,6 +71,7 @@ export default function CategoryDetailPage() {
           title,
           price,
           compare_at_price,
+          deal_expires_at,
           rating,
           total_reviews,
           images:product_images(url),
@@ -88,6 +89,7 @@ export default function CategoryDetailPage() {
           title: p.title,
           price: p.price,
           compare_at_price: p.compare_at_price,
+          deal_expires_at: p.deal_expires_at,
           rating: p.rating || 4.5,
           total_reviews: p.total_reviews || 0,
           images: p.images || [],
@@ -215,6 +217,7 @@ export default function CategoryDetailPage() {
                 title={product.title}
                 price={product.price}
                 compareAtPrice={product.compare_at_price}
+                dealExpiresAt={product.deal_expires_at}
                 image={product.images?.[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"}
                 rating={product.rating}
                 reviewCount={product.total_reviews}

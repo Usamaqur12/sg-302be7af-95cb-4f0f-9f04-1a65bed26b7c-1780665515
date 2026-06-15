@@ -11,22 +11,24 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { Package, MapPin, CreditCard, User, LogOut, Edit2, Eye, Loader2, TrendingUp, DollarSign } from "lucide-react";
+import { Package, MapPin, User, LogOut, Edit2, Eye, Loader2, TrendingUp, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/database.types";
+import { getErrorMessage } from "@/lib/errors";
 
-const STATUS_COLORS: Record<string, string> = {
+type Order = Database["public"]["Tables"]["orders"]["Row"];
+type OrderStatus = Database["public"]["Enums"]["order_status"];
+
+const STATUS_COLORS: Record<OrderStatus, string> = {
   pending: "bg-yellow-500/10 text-yellow-700",
   confirmed: "bg-blue-500/10 text-blue-700",
-  processing: "bg-blue-500/10 text-blue-700",
-  dispatched: "bg-purple-500/10 text-purple-700",
-  in_transit: "bg-purple-500/10 text-purple-700",
+  processing: "bg-cyan-500/10 text-cyan-700",
+  shipped: "bg-purple-500/10 text-purple-700",
   delivered: "bg-green-500/10 text-green-700",
-  completed: "bg-green-500/10 text-green-700",
   cancelled: "bg-red-500/10 text-red-700",
-  returned: "bg-orange-500/10 text-orange-700",
   refunded: "bg-orange-500/10 text-orange-700",
 };
 
@@ -38,7 +40,7 @@ export default function AccountDashboardPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState({ totalOrders: 0, totalSpent: 0 });
 
   const [profileData, setProfileData] = useState({
@@ -54,13 +56,9 @@ export default function AccountDashboardPage() {
     country: "",
   });
 
-  useEffect(() => {
-    if (user && profile) {
-      loadUserData();
-    }
-  }, [user, profile]);
+  const loadUserData = useCallback(async () => {
+    if (!user || !profile) return;
 
-  const loadUserData = async () => {
     try {
       setLoading(true);
 
@@ -74,22 +72,43 @@ export default function AccountDashboardPage() {
       const { data: ordersData, error: ordersError } = await supabase
         .from("orders")
         .select("*")
-        .eq("customer_id", user?.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+        .eq("customer_id", user.id)
+        .order("created_at", { ascending: false });
 
       if (ordersError) throw ordersError;
 
       setOrders(ordersData || []);
 
       // Calculate stats
-      const totalSpent = (ordersData || []).reduce((sum: number, order: any) => sum + (order.total_amount || 0), 0);
+      const totalSpent = (ordersData || []).reduce(
+        (sum, order) =>
+          ["cancelled", "refunded"].includes(order.status ?? "")
+            ? sum
+            : sum + order.total,
+        0
+      );
       setStats({
         totalOrders: ordersData?.length || 0,
         totalSpent,
       });
-    } catch (error: any) {
-      console.error("Error loading user data:", error);
+
+      const { data: addressData, error: addressError } = await supabase
+        .from("customer_addresses")
+        .select("street, city, state, postal_code, country")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (addressError) throw addressError;
+      if (addressData) {
+        setShippingAddress({
+          street: addressData.street,
+          city: addressData.city,
+          state: addressData.state,
+          zipCode: addressData.postal_code,
+          country: addressData.country,
+        });
+      }
+    } catch {
       toast({
         title: "Error",
         description: "Could not load your account data",
@@ -98,7 +117,11 @@ export default function AccountDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile, toast, user]);
+
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -121,10 +144,13 @@ export default function AccountDashboardPage() {
       });
 
       setIsEditing(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Update Failed",
-        description: error.message || "Could not update profile. Please try again.",
+        description: getErrorMessage(
+          error,
+          "Could not update profile. Please try again."
+        ),
         variant: "destructive",
       });
     } finally {
@@ -138,23 +164,30 @@ export default function AccountDashboardPage() {
     setSaving(true);
 
     try {
-      // Note: Address storage requires Phase 2 migration to add address column to profiles table
-      toast({
-        title: "Feature Coming Soon",
-        description: "Address storage will be available after database migration is complete.",
-      });
+      const { error } = await supabase
+        .from("customer_addresses")
+        .upsert({
+          user_id: user.id,
+          street: shippingAddress.street.trim(),
+          city: shippingAddress.city.trim(),
+          state: shippingAddress.state.trim(),
+          postal_code: shippingAddress.zipCode.trim(),
+          country: shippingAddress.country.trim(),
+        }, { onConflict: "user_id" });
 
-      // TODO: Uncomment after Phase 2 migration is applied
-      // const fullAddress = `${shippingAddress.street}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.zipCode}, ${shippingAddress.country}`;
-      // const { error } = await supabase
-      //   .from("profiles")
-      //   .update({ address: fullAddress })
-      //   .eq("id", user.id);
-      // if (error) throw error;
-    } catch (error: any) {
+      if (error) throw error;
+
+      toast({
+        title: "Address Saved",
+        description: "Your default shipping address has been updated.",
+      });
+    } catch (error: unknown) {
       toast({
         title: "Update Failed",
-        description: error.message || "Could not update address. Please try again.",
+        description: getErrorMessage(
+          error,
+          "Could not update address. Please try again."
+        ),
         variant: "destructive",
       });
     } finally {
@@ -226,7 +259,7 @@ export default function AccountDashboardPage() {
               </div>
 
               <Tabs defaultValue="orders" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="orders" className="gap-2">
                     <Package className="h-4 w-4" />
                     Orders
@@ -238,10 +271,6 @@ export default function AccountDashboardPage() {
                   <TabsTrigger value="addresses" className="gap-2">
                     <MapPin className="h-4 w-4" />
                     Addresses
-                  </TabsTrigger>
-                  <TabsTrigger value="payment" className="gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    Payment
                   </TabsTrigger>
                 </TabsList>
 
@@ -262,19 +291,25 @@ export default function AccountDashboardPage() {
                               <div className="space-y-1 mb-4 md:mb-0">
                                 <div className="flex items-center gap-3">
                                   <p className="font-semibold font-mono">{order.order_number}</p>
-                                  <Badge variant="secondary" className={STATUS_COLORS[order.order_status]}>
-                                    {order.order_status}
+                                  <Badge
+                                    variant="secondary"
+                                    className={STATUS_COLORS[order.status ?? "pending"]}
+                                  >
+                                    {order.status ?? "pending"}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground">
-                                  Placed on {new Date(order.created_at).toLocaleDateString("en-US", {
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                  })}
+                                  Placed on{" "}
+                                  {order.created_at
+                                    ? new Date(order.created_at).toLocaleDateString("en-US", {
+                                        year: "numeric",
+                                        month: "long",
+                                        day: "numeric",
+                                      })
+                                    : "Unknown date"}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  Total: ${order.total_amount.toFixed(2)}
+                                  Total: ${order.total.toFixed(2)}
                                 </p>
                               </div>
 
@@ -285,11 +320,6 @@ export default function AccountDashboardPage() {
                                     View Details
                                   </Link>
                                 </Button>
-                                {order.order_status === "delivered" && (
-                                  <Button variant="outline" size="sm">
-                                    Leave Review
-                                  </Button>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -368,8 +398,8 @@ export default function AccountDashboardPage() {
                           <p className="font-medium">Password</p>
                           <p className="text-sm text-muted-foreground">••••••••</p>
                         </div>
-                        <Button variant="outline" disabled>
-                          Change Password
+                        <Button variant="outline" asChild>
+                          <Link href="/forgot-password">Change Password</Link>
                         </Button>
                       </div>
                     </CardContent>
@@ -438,24 +468,6 @@ export default function AccountDashboardPage() {
                   </Card>
                 </TabsContent>
 
-                {/* Payment Tab */}
-                <TabsContent value="payment">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Payment Methods</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-center py-12">
-                        <CreditCard className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                        <p className="text-muted-foreground mb-4">No saved payment methods</p>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Add a payment method to speed up checkout
-                        </p>
-                        <Button disabled>Add Payment Method</Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
               </Tabs>
 
               <Separator className="my-8" />

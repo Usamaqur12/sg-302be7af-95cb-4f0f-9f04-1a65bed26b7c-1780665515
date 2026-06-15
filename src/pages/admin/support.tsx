@@ -1,228 +1,364 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Clock, MessageSquare, Search, Send } from "lucide-react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { RoleGuard } from "@/components/RoleGuard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Search, Send, Clock, CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/database.types";
+import { getErrorMessage } from "@/lib/errors";
+
+type TicketStatus = Database["public"]["Enums"]["ticket_status"];
+
+interface TicketMessage {
+  id: string;
+  message: string;
+  user_id: string;
+  is_internal: boolean | null;
+  created_at: string | null;
+  author: {
+    full_name: string | null;
+    email: string | null;
+    role: string | null;
+  } | null;
+}
+
+interface SupportTicket {
+  id: string;
+  ticket_number: string;
+  subject: string;
+  description: string;
+  category: string | null;
+  priority: string | null;
+  status: TicketStatus | null;
+  created_at: string | null;
+  customer: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
+  messages: TicketMessage[];
+}
+
+const statusConfig: Record<TicketStatus, {
+  variant: "default" | "secondary" | "destructive" | "outline";
+  icon: typeof Clock;
+}> = {
+  open: { variant: "destructive", icon: Clock },
+  in_progress: { variant: "default", icon: Clock },
+  resolved: { variant: "secondary", icon: CheckCircle2 },
+  closed: { variant: "outline", icon: CheckCircle2 },
+};
 
 export default function AdminSupportPage() {
+  const { user, loading: authLoading } = useAuthContext();
+  const { toast } = useToast();
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [selectedTicketId, setSelectedTicketId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("all");
   const [replyText, setReplyText] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  // Mock data - replace with Supabase when support_tickets table exists
-  const tickets = [
-    {
-      id: "1",
-      customerName: "John Doe",
-      subject: "Product not received",
-      status: "open",
-      priority: "high",
-      date: "2024-01-15",
-      category: "order",
-    },
-    {
-      id: "2",
-      customerName: "Jane Smith",
-      subject: "Refund request",
-      status: "in_progress",
-      priority: "medium",
-      date: "2024-01-14",
-      category: "payment",
-    },
-    {
-      id: "3",
-      customerName: "Bob Wilson",
-      subject: "Account access issue",
-      status: "resolved",
-      priority: "low",
-      date: "2024-01-13",
-      category: "account",
-    },
-  ];
+  const loadTickets = useCallback(async () => {
+    setLoading(true);
+    setError("");
 
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; icon: any }> = {
-      open: { variant: "destructive", icon: Clock },
-      in_progress: { variant: "default", icon: Clock },
-      resolved: { variant: "secondary", icon: CheckCircle2 },
-    };
+    const { data, error: ticketError } = await supabase
+      .from("support_tickets")
+      .select(`
+        id,
+        ticket_number,
+        subject,
+        description,
+        category,
+        priority,
+        status,
+        created_at,
+        customer:profiles!support_tickets_user_id_fkey(full_name, email),
+        messages:ticket_messages(
+          id,
+          message,
+          user_id,
+          is_internal,
+          created_at,
+          author:profiles(full_name, email, role)
+        )
+      `)
+      .order("created_at", { ascending: false });
 
-    const { variant, icon: Icon } = variants[status] || variants.open;
-    
+    if (ticketError) {
+      setError(ticketError.message);
+      setLoading(false);
+      return;
+    }
+
+    const nextTickets = ((data ?? []) as unknown as SupportTicket[]).map((ticket) => ({
+      ...ticket,
+      messages: [...(ticket.messages ?? [])].sort((a, b) =>
+        (a.created_at ?? "").localeCompare(b.created_at ?? "")
+      ),
+    }));
+
+    setTickets(nextTickets);
+    setSelectedTicketId((current) => current || nextTickets[0]?.id || "");
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      loadTickets();
+    }
+  }, [authLoading, loadTickets, user]);
+
+  const filteredTickets = tickets.filter((ticket) => {
+    const customer = ticket.customer?.full_name || ticket.customer?.email || "";
+    const search = searchQuery.toLowerCase();
     return (
-      <Badge variant={variant} className="gap-1">
+      (statusFilter === "all" || ticket.status === statusFilter) &&
+      (
+        !search ||
+        ticket.ticket_number.toLowerCase().includes(search) ||
+        ticket.subject.toLowerCase().includes(search) ||
+        customer.toLowerCase().includes(search)
+      )
+    );
+  });
+
+  const selectedTicket = useMemo(
+    () => tickets.find((ticket) => ticket.id === selectedTicketId) ?? null,
+    [selectedTicketId, tickets]
+  );
+
+  const submitReply = async (resolve: boolean) => {
+    if (!user || !selectedTicket || !replyText.trim()) return;
+
+    setSubmitting(true);
+    try {
+      const { error: messageError } = await supabase
+        .from("ticket_messages")
+        .insert({
+          ticket_id: selectedTicket.id,
+          user_id: user.id,
+          message: replyText.trim(),
+          is_internal: false,
+        });
+
+      if (messageError) throw messageError;
+
+      const nextStatus: TicketStatus = resolve ? "resolved" : "in_progress";
+      const { error: statusError } = await supabase
+        .from("support_tickets")
+        .update({
+          assigned_to: user.id,
+          status: nextStatus,
+          resolved_at: resolve ? new Date().toISOString() : null,
+        })
+        .eq("id", selectedTicket.id);
+
+      if (statusError) throw statusError;
+
+      setReplyText("");
+      await loadTickets();
+      toast({
+        title: resolve ? "Ticket resolved" : "Reply sent",
+        description: `${selectedTicket.ticket_number} was updated successfully.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Support update failed",
+        description: getErrorMessage(error, "Could not update this ticket."),
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const statusBadge = (status: TicketStatus | null) => {
+    const resolvedStatus = status ?? "open";
+    const config = statusConfig[resolvedStatus];
+    const Icon = config.icon;
+    return (
+      <Badge variant={config.variant} className="gap-1">
         <Icon className="h-3 w-3" />
-        {status.replace("_", " ")}
+        {resolvedStatus.replace("_", " ")}
       </Badge>
     );
   };
-
-  const getPriorityColor = (priority: string) => {
-    const colors: Record<string, string> = {
-      high: "text-destructive",
-      medium: "text-amber-600",
-      low: "text-muted-foreground",
-    };
-    return colors[priority] || colors.medium;
-  };
-
-  const handleResolveTicket = () => {
-    // Implement resolve logic with Supabase
-    setReplyText("");
-  };
-
-  const filteredTickets = tickets.filter((ticket) => {
-    if (statusFilter !== "all" && ticket.status !== statusFilter) return false;
-    if (searchQuery && !ticket.subject.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !ticket.customerName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
 
   return (
     <RoleGuard allowedRoles={["admin"]}>
       <AdminLayout>
         <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Support Tickets</h1>
-            <p className="text-muted-foreground">Manage customer support requests</p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">Support Tickets</h1>
+              <p className="text-muted-foreground">Reply to and resolve customer requests.</p>
+            </div>
+            <Button variant="outline" onClick={loadTickets}>Refresh</Button>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search tickets..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search ticket, subject, or customer..."
                 className="pl-9"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as TicketStatus | "all")}
+            >
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Tickets</SelectItem>
+                <SelectItem value="all">All tickets</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="in_progress">In progress</SelectItem>
                 <SelectItem value="resolved">Resolved</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Tickets List */}
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle>Tickets ({filteredTickets.length})</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y">
+          {loading ? (
+            <p className="py-16 text-center text-muted-foreground">Loading support tickets...</p>
+          ) : error ? (
+            <Card className="border-destructive">
+              <CardContent className="pt-6 text-destructive">{error}</CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-3">
+              <Card>
+                <CardHeader><CardTitle>Tickets ({filteredTickets.length})</CardTitle></CardHeader>
+                <CardContent className="p-0">
                   {filteredTickets.length === 0 ? (
-                    <div className="p-8 text-center">
-                      <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                      <p className="text-sm text-muted-foreground">No tickets found</p>
+                    <div className="p-8 text-center text-muted-foreground">
+                      <MessageSquare className="mx-auto mb-3 h-10 w-10" />
+                      No tickets found.
                     </div>
                   ) : (
-                    filteredTickets.map((ticket) => (
-                      <button
-                        key={ticket.id}
-                        onClick={() => setSelectedTicket(ticket.id)}
-                        className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${
-                          selectedTicket === ticket.id ? "bg-muted" : ""
-                        }`}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <span className="font-semibold text-sm">{ticket.customerName}</span>
-                          {getStatusBadge(ticket.status)}
-                        </div>
-                        <p className="font-medium text-sm mb-1">{ticket.subject}</p>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className={`font-medium uppercase ${getPriorityColor(ticket.priority)}`}>
-                            {ticket.priority}
-                          </span>
-                          <span className="text-muted-foreground">{ticket.date}</span>
-                        </div>
-                      </button>
-                    ))
+                    <div className="divide-y">
+                      {filteredTickets.map((ticket) => (
+                        <button
+                          key={ticket.id}
+                          type="button"
+                          onClick={() => setSelectedTicketId(ticket.id)}
+                          className={`w-full p-4 text-left transition-colors hover:bg-muted/50 ${
+                            selectedTicketId === ticket.id ? "bg-muted" : ""
+                          }`}
+                        >
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-mono text-xs font-semibold">{ticket.ticket_number}</span>
+                            {statusBadge(ticket.status)}
+                          </div>
+                          <p className="font-medium">{ticket.subject}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {ticket.customer?.full_name || ticket.customer?.email || "Customer"}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Ticket Detail */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>
-                  {selectedTicket ? "Ticket Details" : "Select a ticket"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {selectedTicket ? (
-                  <div className="space-y-4">
-                    <div className="bg-muted p-4 rounded-lg space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold">From: John Doe</p>
-                          <p className="text-sm text-muted-foreground">john@example.com</p>
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>{selectedTicket?.subject || "Select a ticket"}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {!selectedTicket ? (
+                    <div className="py-12 text-center text-muted-foreground">
+                      <MessageSquare className="mx-auto mb-3 h-10 w-10" />
+                      Select a ticket to view the conversation.
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="rounded-md bg-muted p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">
+                              {selectedTicket.customer?.full_name || "Customer"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {selectedTicket.customer?.email}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Badge variant="outline">{selectedTicket.priority || "medium"}</Badge>
+                            {selectedTicket.category && (
+                              <Badge variant="outline">{selectedTicket.category}</Badge>
+                            )}
+                          </div>
                         </div>
-                        <Badge variant="destructive">High Priority</Badge>
+                        <p className="mt-4 text-sm">{selectedTicket.description}</p>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground mb-1">Subject</p>
-                        <p className="font-semibold">Product not received</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground mb-1">Category</p>
-                        <Badge variant="outline">Order</Badge>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground mb-1">Message</p>
-                        <p className="text-sm">
-                          I placed an order (#ORD-12345) two weeks ago and haven't received it yet. 
-                          The tracking shows it was delivered but I never received the package. 
-                          Can you please help me resolve this issue?
-                        </p>
-                      </div>
-                    </div>
 
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Response</label>
-                      <Textarea
-                        placeholder="Type your response..."
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        rows={4}
-                      />
-                      <div className="flex gap-2 mt-3">
-                        <Button onClick={handleResolveTicket}>
-                          <Send className="h-4 w-4 mr-2" />
-                          Send & Keep Open
-                        </Button>
-                        <Button onClick={handleResolveTicket} variant="secondary">
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          Send & Resolve
-                        </Button>
+                      {selectedTicket.messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`rounded-md border p-4 ${
+                            message.author?.role === "admin" ? "ml-6 bg-primary/5" : "mr-6"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold">
+                              {message.author?.full_name || message.author?.email || "User"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {message.created_at ? new Date(message.created_at).toLocaleString() : ""}
+                            </p>
+                          </div>
+                          <p className="mt-2 text-sm">{message.message}</p>
+                        </div>
+                      ))}
+
+                      <div>
+                        <Textarea
+                          value={replyText}
+                          onChange={(event) => setReplyText(event.target.value)}
+                          placeholder="Write a response..."
+                          rows={5}
+                        />
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            onClick={() => submitReply(false)}
+                            disabled={submitting || !replyText.trim()}
+                          >
+                            <Send className="mr-2 h-4 w-4" />
+                            Send & Keep Open
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => submitReply(true)}
+                            disabled={submitting || !replyText.trim()}
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Send & Resolve
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground">Select a ticket to view details</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </AdminLayout>
     </RoleGuard>

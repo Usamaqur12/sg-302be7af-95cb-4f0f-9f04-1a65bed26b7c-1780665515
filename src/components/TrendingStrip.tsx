@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TrendingProduct {
@@ -15,6 +16,7 @@ interface TrendingProduct {
 }
 
 export function TrendingStrip() {
+  const { formatPrice } = useMarketplaceSettings();
   const [trendingProducts, setTrendingProducts] = useState<TrendingProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -75,7 +77,7 @@ export function TrendingStrip() {
                 <div>
                   <p className="text-sm font-medium line-clamp-1">{product.title}</p>
                   <p className="text-sm font-mono font-bold text-destructive">
-                    ${product.price.toFixed(2)}
+                    {formatPrice(product.price)}
                   </p>
                 </div>
               </Link>

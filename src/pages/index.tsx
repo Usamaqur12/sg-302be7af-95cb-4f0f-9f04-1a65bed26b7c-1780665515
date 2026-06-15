@@ -1,41 +1,224 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { ProductCard } from "@/components/ProductCard";
-import { CategoryCard } from "@/components/CategoryCard";
-import { TrendingStrip } from "@/components/TrendingStrip";
-import { CategoryIconRow } from "@/components/CategoryIconRow";
-import { ShockingDealsSection } from "@/components/ShockingDealsSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { 
-  ArrowRight, 
-  TrendingUp, 
-  Award, 
-  ShieldCheck, 
-  TruckIcon, 
-  RefreshCw,
-  Star,
-  Users,
+import {
+  ArrowRight,
+  Award,
   DollarSign,
-  Zap,
+  RefreshCw,
+  ShieldCheck,
   ShoppingBag,
-  Shield,
-  Headphones,
-  Search
+  Star,
+  Store,
+  TruckIcon,
+  Users,
+  Zap,
 } from "lucide-react";
-import Link from "next/link";
-import Image from "next/image";
 import { supabase } from "@/integrations/supabase/client";
 
+type SellerSummary = {
+  id: string;
+  business_name: string;
+};
+
+type ProductQueryRow = {
+  id: string;
+  title: string;
+  price: number;
+  compare_at_price?: number | null;
+  deal_expires_at?: string | null;
+  rating?: number | null;
+  total_reviews?: number | null;
+  images?: { url: string }[] | null;
+  seller?: SellerSummary | SellerSummary[] | null;
+};
+
+type HomepageProduct = {
+  id: string;
+  title: string;
+  price: number;
+  compareAtPrice?: number;
+  image: string;
+  rating: number;
+  reviewCount: number;
+  sellerName: string;
+  sellerId?: string;
+  dealExpiresAt?: string | null;
+};
+
+type FeaturedVendor = {
+  id: string;
+  name: string;
+  logo: string;
+  rating: number;
+  products: number;
+  verified: boolean;
+};
+
+type HomeBanner = {
+  id: string;
+  title: string;
+  image_url: string;
+  link_url?: string | null;
+};
+
+type HeroSettings = {
+  title: string;
+  subtitle: string;
+  ctaLabel: string;
+  ctaHref: string;
+};
+
+type VendorQueryRow = {
+  id: string;
+  business_name: string;
+  logo_url?: string | null;
+};
+
+function toHomepageProduct(product: ProductQueryRow, fallbackImage: string): HomepageProduct {
+  const seller = Array.isArray(product.seller) ? product.seller[0] : product.seller;
+
+  return {
+    id: product.id,
+    title: product.title,
+    price: product.price,
+    compareAtPrice: product.compare_at_price ?? undefined,
+    dealExpiresAt: product.deal_expires_at ?? null,
+    image: product.images?.[0]?.url || fallbackImage,
+    rating: product.rating ?? 0,
+    reviewCount: product.total_reviews ?? 0,
+    sellerName: seller?.business_name || "Unknown Seller",
+    sellerId: seller?.id,
+  };
+}
+
+const shoppingCards = [
+  {
+    title: "Refresh your home",
+    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=700&h=520&fit=crop",
+    href: "/categories/home-kitchen",
+    links: ["Kitchen", "Furniture", "Storage", "Decor"],
+  },
+  {
+    title: "Tech deals for every desk",
+    image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=700&h=520&fit=crop",
+    href: "/categories/electronics",
+    links: ["Laptops", "Audio", "Gaming", "Smart devices"],
+  },
+  {
+    title: "Style picks under budget",
+    image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=700&h=520&fit=crop",
+    href: "/categories/fashion",
+    links: ["Women", "Men", "Shoes", "Watches"],
+  },
+  {
+    title: "Beauty and wellness",
+    image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=700&h=520&fit=crop",
+    href: "/categories/beauty-health",
+    links: ["Skincare", "Grooming", "Vitamins", "Personal care"],
+  },
+];
+
+const serviceHighlights = [
+  {
+    icon: ShieldCheck,
+    title: "Buyer Protection",
+    description: "Secure checkout, dispute support and money-back coverage on eligible orders.",
+  },
+  {
+    icon: Award,
+    title: "Verified Sellers",
+    description: "Seller approval, verified stores and reviewed product publishing.",
+  },
+  {
+    icon: TruckIcon,
+    title: "Fast Delivery",
+    description: "Track orders from checkout to doorstep with clear delivery status updates.",
+  },
+  {
+    icon: RefreshCw,
+    title: "Easy Returns",
+    description: "Simple return requests and support workflows for customer confidence.",
+  },
+];
+
+const defaultHeroSettings: HeroSettings = {
+  title: "Everything your customers search for, all in one marketplace",
+  subtitle: "Discover trusted sellers, daily deals, fast order tracking and admin-approved products built for a serious multivendor store.",
+  ctaLabel: "Shop Today's Deals",
+  ctaHref: "/deals",
+};
+
+const defaultHeroImage = "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1800&h=820&fit=crop";
+
+function ProductShelf({
+  title,
+  eyebrow,
+  href,
+  products,
+  loading,
+}: {
+  title: string;
+  eyebrow: string;
+  href: string;
+  products: HomepageProduct[];
+  loading: boolean;
+}) {
+  return (
+    <section className="py-10">
+      <div className="container">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div>
+            <Badge className="mb-2 bg-accent text-accent-foreground">{eyebrow}</Badge>
+            <h2 className="text-2xl font-bold md:text-3xl">{title}</h2>
+          </div>
+          <Button asChild variant="ghost" className="hidden sm:inline-flex">
+            <Link href={href}>
+              See more
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Card key={index} className="h-80 animate-pulse rounded-md bg-muted/60" />
+            ))}
+          </div>
+        ) : products.length > 0 ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {products.map((product) => (
+              <ProductCard key={product.id} {...product} />
+            ))}
+          </div>
+        ) : (
+          <Card className="rounded-md border-dashed p-8 text-center">
+            <p className="font-medium">Products will appear here after admin approval.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Seller listings stay hidden until the admin panel approves them.
+            </p>
+          </Card>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function HomePage() {
-  const [featuredCategories, setFeaturedCategories] = useState<any[]>([]);
-  const [bestSellers, setBestSellers] = useState<any[]>([]);
-  const [flashDeals, setFlashDeals] = useState<any[]>([]);
-  const [newArrivals, setNewArrivals] = useState<any[]>([]);
-  const [featuredVendors, setFeaturedVendors] = useState<any[]>([]);
+  const [bestSellers, setBestSellers] = useState<HomepageProduct[]>([]);
+  const [flashDeals, setFlashDeals] = useState<HomepageProduct[]>([]);
+  const [newArrivals, setNewArrivals] = useState<HomepageProduct[]>([]);
+  const [featuredVendors, setFeaturedVendors] = useState<FeaturedVendor[]>([]);
+  const [heroSettings, setHeroSettings] = useState<HeroSettings>(defaultHeroSettings);
+  const [heroBanner, setHeroBanner] = useState<HomeBanner | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,23 +227,35 @@ export default function HomePage() {
 
   const fetchHomepageData = async () => {
     try {
-      // Fetch featured categories
-      const { data: categoriesData } = await supabase
-        .from("categories")
-        .select("id, name, slug, image_url")
-        .limit(6);
+      const [{ data: cmsSettingsData }, { data: bannersData }] = await Promise.all([
+        supabase
+          .from("system_settings")
+          .select("key, value")
+          .in("key", [
+            "homepage_hero_title",
+            "homepage_hero_subtitle",
+            "homepage_hero_cta_label",
+            "homepage_hero_cta_href",
+          ]),
+        supabase
+          .from("banners")
+          .select("id, title, image_url, link_url")
+          .eq("is_active", true)
+          .order("display_order", { ascending: true })
+          .limit(1),
+      ]);
 
-      if (categoriesData) {
-        setFeaturedCategories(categoriesData.map(cat => ({
-          id: cat.id,
-          name: cat.name,
-          slug: cat.slug,
-          image: cat.image_url || "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800&h=800&fit=crop",
-          productCount: 0,
-        })));
-      }
+      const cmsSettings = new Map<string, string>(
+        (cmsSettingsData ?? []).map((item) => [String(item.key), String(item.value ?? "")])
+      );
+      setHeroSettings({
+        title: cmsSettings.get("homepage_hero_title") || defaultHeroSettings.title,
+        subtitle: cmsSettings.get("homepage_hero_subtitle") || defaultHeroSettings.subtitle,
+        ctaLabel: cmsSettings.get("homepage_hero_cta_label") || defaultHeroSettings.ctaLabel,
+        ctaHref: cmsSettings.get("homepage_hero_cta_href") || defaultHeroSettings.ctaHref,
+      });
+      setHeroBanner(((bannersData ?? [])[0] as HomeBanner | undefined) ?? null);
 
-      // Fetch best sellers (by rating and total_reviews)
       const { data: bestSellersData } = await supabase
         .from("products")
         .select(`
@@ -68,6 +263,7 @@ export default function HomePage() {
           title,
           price,
           compare_at_price,
+          deal_expires_at,
           rating,
           total_reviews,
           images:product_images(url),
@@ -75,23 +271,19 @@ export default function HomePage() {
         `)
         .eq("status", "approved")
         .order("total_reviews", { ascending: false })
-        .limit(4);
+        .limit(8);
 
       if (bestSellersData) {
-        setBestSellers(bestSellersData.map(p => ({
-          id: p.id,
-          title: p.title,
-          price: p.price,
-          compareAtPrice: p.compare_at_price,
-          image: (p.images as any)?.[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop",
-          rating: p.rating,
-          reviewCount: p.total_reviews,
-          sellerName: (p.seller as any)?.business_name || "Unknown Seller",
-          sellerId: (p.seller as any)?.id,
-        })));
+        setBestSellers(
+          ((bestSellersData ?? []) as unknown as ProductQueryRow[]).map((product) =>
+            toHomepageProduct(
+              product,
+              "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop"
+            )
+          )
+        );
       }
 
-      // Fetch flash deals (is_deal=true and deal not expired)
       const { data: flashDealsData } = await supabase
         .from("products")
         .select(`
@@ -99,6 +291,7 @@ export default function HomePage() {
           title,
           price,
           compare_at_price,
+          deal_expires_at,
           rating,
           total_reviews,
           images:product_images(url),
@@ -107,23 +300,19 @@ export default function HomePage() {
         .eq("status", "approved")
         .eq("is_deal", true)
         .gte("deal_expires_at", new Date().toISOString())
-        .limit(4);
+        .limit(8);
 
       if (flashDealsData) {
-        setFlashDeals(flashDealsData.map(p => ({
-          id: p.id,
-          title: p.title,
-          price: p.price,
-          compareAtPrice: p.compare_at_price,
-          image: (p.images as any)?.[0]?.url || "https://images.unsplash.com/photo-1580480055273-228ff5388ef8?w=600&h=600&fit=crop",
-          rating: p.rating,
-          reviewCount: p.total_reviews,
-          sellerName: (p.seller as any)?.business_name || "Unknown Seller",
-          sellerId: (p.seller as any)?.id,
-        })));
+        setFlashDeals(
+          ((flashDealsData ?? []) as unknown as ProductQueryRow[]).map((product) =>
+            toHomepageProduct(
+              product,
+              "https://images.unsplash.com/photo-1580480055273-228ff5388ef8?w=600&h=600&fit=crop"
+            )
+          )
+        );
       }
 
-      // Fetch new arrivals (recent products)
       const { data: newArrivalsData } = await supabase
         .from("products")
         .select(`
@@ -138,23 +327,19 @@ export default function HomePage() {
         `)
         .eq("status", "approved")
         .order("created_at", { ascending: false })
-        .limit(4);
+        .limit(8);
 
       if (newArrivalsData) {
-        setNewArrivals(newArrivalsData.map(p => ({
-          id: p.id,
-          title: p.title,
-          price: p.price,
-          compareAtPrice: p.compare_at_price,
-          image: (p.images as any)?.[0]?.url || "https://images.unsplash.com/photo-1627123424574-724758594e93?w=600&h=600&fit=crop",
-          rating: p.rating,
-          reviewCount: p.total_reviews,
-          sellerName: (p.seller as any)?.business_name || "Unknown Seller",
-          sellerId: (p.seller as any)?.id,
-        })));
+        setNewArrivals(
+          ((newArrivalsData ?? []) as unknown as ProductQueryRow[]).map((product) =>
+            toHomepageProduct(
+              product,
+              "https://images.unsplash.com/photo-1627123424574-724758594e93?w=600&h=600&fit=crop"
+            )
+          )
+        );
       }
 
-      // Fetch featured vendors (verified sellers)
       const { data: vendorsData } = await supabase
         .from("seller_profiles")
         .select("id, business_name, logo_url")
@@ -163,223 +348,96 @@ export default function HomePage() {
         .limit(4);
 
       if (vendorsData) {
-        setFeaturedVendors(vendorsData.map(v => ({
-          id: v.id,
-          name: v.business_name,
-          logo: v.logo_url || "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200&h=200&fit=crop",
-          rating: 4.5, // Default rating since average_rating column doesn't exist
-          products: 0,
-          verified: true,
-        })));
+        setFeaturedVendors(
+          ((vendorsData ?? []) as unknown as VendorQueryRow[]).map((vendor) => ({
+            id: vendor.id,
+            name: vendor.business_name,
+            logo: vendor.logo_url || "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200&h=200&fit=crop",
+            rating: 4.5,
+            products: 0,
+            verified: true,
+          }))
+        );
       }
-    } catch (error) {
-      // Silent error handling - just set empty arrays
+    } catch {
+      // Homepage sections remain usable with local fallback cards when API data is unavailable.
     } finally {
       setLoading(false);
     }
   };
 
+  const heroImage = heroBanner?.image_url || defaultHeroImage;
+  const heroTitle = heroBanner?.title || heroSettings.title;
+  const heroHref = heroBanner?.link_url || heroSettings.ctaHref || "/deals";
+
   return (
     <CustomerLayout>
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-primary via-primary/95 to-primary/90 text-primary-foreground overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDE0YzAtMS4xLjktMiAyLTJzMiAuOSAyIDItLjkgMi0yIDItMi0uOS0yLTJ6bS04IDBjMC0xLjEuOS0yIDItMnMyIC45IDIgMi0uOSAyLTIgMi0yLS45LTItMnptLTggMGMwLTEuMS45LTIgMi0yczIgLjkgMiAyLS45IDItMiAyLTItLjktMi0yem0wIDhjMC0xLjEuOS0yIDItMnMyIC45IDIgMi0uOSAyLTIgMi0yLS45LTItMnptOCAwYzAtMS4xLjktMiAyLTJzMiAuOSAyIDItLjkgMi0yIDItMi0uOS0yLTJ6bTggMGMwLTEuMS45LTIgMi0yczIgLjkgMiAyLS45IDItMiAyLTItLjktMi0yem0wIDhjMC0xLjEuOS0yIDItMnMyIC45IDIgMi0uOSAyLTIgMi0yLS45LTItMnptLTggMGMwLTEuMS45LTIgMi0yczIgLjkgMiAyLS45IDItMiAyLTItLjktMi0yem0tOCAwYzAtMS4xLjktMiAyLTJzMiAuOSAyIDItLjkgMi0yIDItMi0uOS0yLTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-20" />
-        
-        <div className="container relative py-16 md:py-24">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
+      <section className="bg-[#e7edf3]">
+        <div className="relative min-h-[430px] overflow-hidden md:min-h-[500px]">
+          <Image
+            src={heroImage}
+            alt={heroTitle}
+            fill
+            priority
+            className="object-cover"
+            unoptimized={heroImage.startsWith("/uploads/")}
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0b172a]/95 via-[#0b172a]/70 to-[#0b172a]/15" />
+          <div className="container relative z-10 flex min-h-[430px] items-center py-12 text-white md:min-h-[500px]">
+            <div className="max-w-2xl">
               <Badge className="mb-4 bg-accent text-accent-foreground">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                Trending Now
+                <ShoppingBag className="mr-1 h-3.5 w-3.5" />
+                Mercato Mega Market
               </Badge>
-              
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-                Shop Smarter, Not Harder
+              <h1 className="mb-5 text-4xl font-bold leading-tight md:text-6xl">
+                {heroTitle}
               </h1>
-              
-              <p className="text-lg md:text-xl text-primary-foreground/90 mb-8 max-w-xl">
-                Thousands of trusted sellers. Millions of quality products. Competitive prices and fast, free shipping.
+              <p className="mb-7 max-w-xl text-base text-white/85 md:text-lg">
+                {heroSettings.subtitle}
               </p>
-              
-              <div className="flex flex-wrap gap-4">
-                <Link href="/categories">
-                  <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold">
-                    Shop Now
+              <div className="flex flex-wrap gap-3">
+                <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90">
+                  <Link href={heroHref}>
+                    {heroSettings.ctaLabel}
                     <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-                <Link href="/seller/register">
-                  <Button size="lg" variant="outline" className="bg-transparent border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10">
-                    Start Selling
-                  </Button>
-                </Link>
-              </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-12">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-accent" />
-                  <span className="text-sm">Buyer Protection</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Award className="h-5 w-5 text-accent" />
-                  <span className="text-sm">Verified Sellers</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <TruckIcon className="h-5 w-5 text-accent" />
-                  <span className="text-sm">Fast Shipping</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="h-5 w-5 text-accent" />
-                  <span className="text-sm">Easy Returns</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="hidden md:block">
-              <div className="relative">
-                <div className="absolute -inset-4 bg-gradient-to-r from-accent/20 to-accent/5 blur-3xl rounded-full"></div>
-                <Image
-                  src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&h=800&fit=crop"
-                  alt="Shopping"
-                  width={600}
-                  height={600}
-                  className="relative rounded-2xl shadow-2xl"
-                />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                >
+                  <Link href="/seller-info">Start Selling</Link>
+                </Button>
               </div>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* NEW: Trending Products Strip */}
-      <TrendingStrip />
-
-      {/* NEW: Category Icon Row */}
-      <CategoryIconRow />
-
-      {/* NEW: Shocking Deals Section */}
-      <ShockingDealsSection />
-
-      {/* Featured Categories */}
-      <section className="py-12 md:py-16 bg-background">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Shop by Category</h2>
-              <p className="text-muted-foreground">Explore our wide range of product categories</p>
-            </div>
-            <Link href="/categories">
-              <Button variant="ghost" className="hidden sm:flex">
-                View All
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {featuredCategories.map((category) => (
-              <CategoryCard key={category.id} {...category} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Flash Deals */}
-      <section className="py-16 bg-warning/5">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <Badge className="mb-2 bg-warning text-warning-foreground">
-                <Zap className="h-3 w-3 mr-1" />
-                Limited Time
-              </Badge>
-              <h2 className="text-3xl font-bold mb-2">Flash Deals</h2>
-              <p className="text-muted-foreground">Hurry! These deals won't last long</p>
-            </div>
-            <Link href="/deals">
-              <Button variant="ghost" className="hidden sm:flex">
-                View All Deals
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {flashDeals.map((product) => (
-              <ProductCard key={product.id} {...product} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Best Sellers */}
-      <section className="py-16">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <Badge className="mb-2">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                Hot Picks
-              </Badge>
-              <h2 className="text-3xl font-bold mb-2">Best Selling Products</h2>
-              <p className="text-muted-foreground">Top rated items customers are loving</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {bestSellers.map((product) => (
-              <ProductCard key={product.id} {...product} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Vendors */}
-      <section className="py-16 bg-muted/30">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Featured Sellers</h2>
-              <p className="text-muted-foreground">Shop from top-rated verified vendors</p>
-            </div>
-            <Link href="/sellers">
-              <Button variant="ghost" className="hidden sm:flex">
-                View All Sellers
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredVendors.map((vendor) => (
-              <Card key={vendor.id} className="group overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="p-6">
-                  <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-4">
-                    <Image
-                      src={vendor.logo}
-                      alt={vendor.name}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-lg">{vendor.name}</h3>
-                    {vendor.verified && (
-                      <Award className="h-5 w-5 text-accent flex-shrink-0" />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-warning text-warning" />
-                      <span className="font-mono">{vendor.rating}</span>
+        <div className="container relative z-20 -mt-4 pb-8 lg:-mt-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {shoppingCards.map((card) => (
+              <Card key={card.href} className="overflow-hidden rounded-md border-0 bg-card shadow-lg">
+                <div className="p-4">
+                  <h2 className="mb-3 text-xl font-bold">{card.title}</h2>
+                  <Link href={card.href} className="group block">
+                    <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-md bg-muted">
+                      <Image
+                        src={card.image}
+                        alt={card.title}
+                        fill
+                        className="object-cover transition duration-300 group-hover:scale-105"
+                      />
                     </div>
-                    <span>•</span>
-                    <span>{vendor.products} products</span>
+                  </Link>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    {card.links.map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
                   </div>
-                  <Link href={`/sellers/${vendor.id}`}>
-                    <Button variant="outline" size="sm" className="w-full">
-                      Visit Store
-                    </Button>
+                  <Link href={card.href} className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline">
+                    Shop now
                   </Link>
                 </div>
               </Card>
@@ -388,159 +446,159 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* New Arrivals */}
-      <section className="py-16">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <Badge className="mb-2 bg-green-500 text-white">
-                New
-              </Badge>
-              <h2 className="text-3xl font-bold mb-2">Just Arrived</h2>
-              <p className="text-muted-foreground">Check out the latest additions to our catalog</p>
-            </div>
-            <Link href="/new-arrivals">
-              <Button variant="ghost" className="hidden sm:flex">
-                View All
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
+      <ProductShelf
+        title="Today's deals"
+        eyebrow="Limited time"
+        href="/deals"
+        products={flashDeals}
+        loading={loading}
+      />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {newArrivals.map((product) => (
-              <ProductCard key={product.id} {...product} />
+      <section className="bg-muted/40 py-10">
+        <div className="container">
+          <div className="grid gap-4 md:grid-cols-4">
+            {serviceHighlights.map((item) => (
+              <Card key={item.title} className="rounded-md p-5">
+                <item.icon className="mb-4 h-8 w-8 text-accent" />
+                <h3 className="font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{item.description}</p>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Customer Protection */}
-      <section className="py-16 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent">
+      <ProductShelf
+        title="Best selling products"
+        eyebrow="Hot picks"
+        href="/best-sellers"
+        products={bestSellers}
+        loading={loading}
+      />
+
+      <section className="bg-background py-10">
         <div className="container">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Shop with Confidence</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Your satisfaction is our priority. We've got you covered every step of the way.
-            </p>
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <Badge className="mb-2 bg-primary text-primary-foreground">
+                <Store className="mr-1 h-3.5 w-3.5" />
+                Verified stores
+              </Badge>
+              <h2 className="text-2xl font-bold md:text-3xl">Featured sellers</h2>
+              <p className="mt-1 text-muted-foreground">Top vendors approved by the marketplace admin.</p>
+            </div>
+            <Button asChild variant="ghost" className="hidden sm:inline-flex">
+              <Link href="/sellers">
+                View sellers
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-              <div className="h-16 w-16 rounded-full bg-accent/10 mx-auto mb-4 flex items-center justify-center">
-                <ShieldCheck className="h-8 w-8 text-accent" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2">Buyer Protection</h3>
-              <p className="text-sm text-muted-foreground">
-                Your money is safe with our secure payment system and money-back guarantee.
-              </p>
-            </Card>
-
-            <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-              <div className="h-16 w-16 rounded-full bg-accent/10 mx-auto mb-4 flex items-center justify-center">
-                <Award className="h-8 w-8 text-accent" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2">Verified Sellers</h3>
-              <p className="text-sm text-muted-foreground">
-                Every seller is thoroughly vetted and verified before joining our marketplace.
-              </p>
-            </Card>
-
-            <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-              <div className="h-16 w-16 rounded-full bg-accent/10 mx-auto mb-4 flex items-center justify-center">
-                <TruckIcon className="h-8 w-8 text-accent" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2">Fast & Free Shipping</h3>
-              <p className="text-sm text-muted-foreground">
-                Free delivery on orders over $50. Fast shipping nationwide.
-              </p>
-            </Card>
-
-            <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-              <div className="h-16 w-16 rounded-full bg-accent/10 mx-auto mb-4 flex items-center justify-center">
-                <RefreshCw className="h-8 w-8 text-accent" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2">Easy Returns</h3>
-              <p className="text-sm text-muted-foreground">
-                Changed your mind? No problem. 30-day hassle-free return policy.
-              </p>
-            </Card>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {featuredVendors.length > 0 ? (
+              featuredVendors.map((vendor) => (
+                <Card key={vendor.id} className="group overflow-hidden rounded-md transition hover:shadow-lg">
+                  <div className="p-5">
+                    <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-md bg-muted">
+                      <Image
+                        src={vendor.logo}
+                        alt={vendor.name}
+                        fill
+                        className="object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    </div>
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <h3 className="text-lg font-semibold">{vendor.name}</h3>
+                      {vendor.verified && <Award className="h-5 w-5 shrink-0 text-accent" />}
+                    </div>
+                    <div className="mb-4 flex items-center gap-3 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Star className="h-4 w-4 fill-warning text-warning" />
+                        {vendor.rating}
+                      </span>
+                      <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+                      <span>{vendor.products} products</span>
+                    </div>
+                    <Button asChild variant="outline" size="sm" className="w-full">
+                      <Link href={`/sellers/${vendor.id}`}>Visit Store</Link>
+                    </Button>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <Card className="rounded-md border-dashed p-8 text-center lg:col-span-4">
+                <p className="font-medium">Verified sellers will appear here after approval.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Admin approval controls which seller stores are featured publicly.
+                </p>
+              </Card>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Why Sell With Us */}
-      <section className="py-16 bg-primary text-primary-foreground">
+      <ProductShelf
+        title="New arrivals"
+        eyebrow="Fresh stock"
+        href="/new-arrivals"
+        products={newArrivals}
+        loading={loading}
+      />
+
+      <section className="bg-[#131921] py-14 text-white">
         <div className="container">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="grid gap-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
             <div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                Start Your Business Today
-              </h2>
-              <p className="text-lg text-primary-foreground/90 mb-8">
-                Join thousands of successful sellers. Reach millions of customers and grow your business on our platform.
+              <Badge className="mb-4 bg-accent text-accent-foreground">
+                <Zap className="mr-1 h-3.5 w-3.5" />
+                Seller growth
+              </Badge>
+              <h2 className="mb-5 text-3xl font-bold md:text-4xl">Build a real multivendor business on Mercato</h2>
+              <p className="mb-7 max-w-2xl text-white/80">
+                Sellers can apply, admins approve stores and products, and customers only see approved live listings.
               </p>
-              
-              <div className="grid gap-6 mb-8">
-                <div className="flex gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-                    <Users className="h-6 w-6 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-1">Millions of Customers</h3>
-                    <p className="text-sm text-primary-foreground/80">
-                      Get instant access to a massive customer base ready to buy.
-                    </p>
-                  </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="rounded-md bg-white/10 p-4">
+                  <Users className="mb-3 h-6 w-6 text-accent" />
+                  <h3 className="font-semibold">Customer reach</h3>
+                  <p className="mt-1 text-sm text-white/70">Dedicated seller storefronts and product discovery.</p>
                 </div>
-
-                <div className="flex gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-                    <DollarSign className="h-6 w-6 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-1">Competitive Fees</h3>
-                    <p className="text-sm text-primary-foreground/80">
-                      Low commission rates and transparent pricing with no hidden costs.
-                    </p>
-                  </div>
+                <div className="rounded-md bg-white/10 p-4">
+                  <DollarSign className="mb-3 h-6 w-6 text-accent" />
+                  <h3 className="font-semibold">Clear fees</h3>
+                  <p className="mt-1 text-sm text-white/70">Transparent marketplace operations for cPanel hosting.</p>
                 </div>
-
-                <div className="flex gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-                    <Zap className="h-6 w-6 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-1">Easy Setup</h3>
-                    <p className="text-sm text-primary-foreground/80">
-                      Get your store up and running in minutes with our simple onboarding.
-                    </p>
-                  </div>
+                <div className="rounded-md bg-white/10 p-4">
+                  <ShieldCheck className="mb-3 h-6 w-6 text-accent" />
+                  <h3 className="font-semibold">Admin control</h3>
+                  <p className="mt-1 text-sm text-white/70">Approval gates for sellers, products and public content.</p>
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-4">
-                <Link href="/seller/register">
-                  <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold">
+              <div className="mt-7 flex flex-wrap gap-3">
+                <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90">
+                  <Link href="/seller/register">
                     Register as Seller
                     <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-                <Link href="/seller-info">
-                  <Button size="lg" variant="outline" className="bg-transparent border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10">
-                    Learn More
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                >
+                  <Link href="/seller-info">Learn More</Link>
+                </Button>
               </div>
             </div>
 
-            <div className="hidden md:block">
+            <div className="relative hidden aspect-[4/3] overflow-hidden rounded-md md:block">
               <Image
-                src="https://images.unsplash.com/photo-1556740758-90de374c12ad?w=800&h=800&fit=crop"
-                alt="Seller Dashboard"
-                width={600}
-                height={600}
-                className="rounded-2xl shadow-2xl"
+                src="https://images.unsplash.com/photo-1556740758-90de374c12ad?w=900&h=700&fit=crop"
+                alt="Seller managing marketplace dashboard"
+                fill
+                className="object-cover"
               />
             </div>
           </div>

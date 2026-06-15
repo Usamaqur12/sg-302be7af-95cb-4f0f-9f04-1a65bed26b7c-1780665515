@@ -2,10 +2,13 @@ import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 export default function SellerPricingPage() {
+  const { formatPrice } = useMarketplaceSettings();
+
   return (
     <CustomerLayout>
       <div className="container py-12">
@@ -169,7 +172,7 @@ export default function SellerPricingPage() {
               <div>
                 <h3 className="font-semibold mb-2">Payment Processing</h3>
                 <p className="text-sm text-muted-foreground">
-                  Standard payment processing fee of 2.9% + $0.30 per transaction applies to all plans.
+                  Standard payment processing fee of 2.9% + {formatPrice(80)} per transaction applies to all plans.
                   This covers credit card processing, fraud protection, and secure payment handling.
                 </p>
               </div>
@@ -185,7 +188,7 @@ export default function SellerPricingPage() {
               <div>
                 <h3 className="font-semibold mb-2">Refunds & Chargebacks</h3>
                 <p className="text-sm text-muted-foreground">
-                  In case of refunds, the full commission is refunded. Chargeback fees ($15) apply
+                  In case of refunds, the full commission is refunded. Chargeback fees ({formatPrice(4200)}) apply
                   only if the chargeback is ruled in favor of the buyer.
                 </p>
               </div>

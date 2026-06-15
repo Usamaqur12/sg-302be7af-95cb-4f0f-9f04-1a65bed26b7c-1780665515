@@ -9,6 +9,7 @@ import { Star, Heart, ShoppingCart } from "lucide-react";
 import { CountdownTimer } from "./CountdownTimer";
 import { useState } from "react";
 import { useCart } from "@/contexts/CartContext";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { useToast } from "@/hooks/use-toast";
 
 interface DealProductCardProps {
@@ -40,6 +41,7 @@ export function DealProductCard({
 }: DealProductCardProps) {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const { addToCart } = useCart();
+  const { formatPrice } = useMarketplaceSettings();
   const { toast } = useToast();
 
   const handleAddToCart = async (e: React.MouseEvent) => {
@@ -119,10 +121,10 @@ export function DealProductCard({
           <div className="mb-3">
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className="text-lg lg:text-xl font-bold font-mono text-accent">
-                ${price.toFixed(2)}
+                {formatPrice(price)}
               </span>
               <span className="text-xs text-muted-foreground line-through font-mono">
-                ${oldPrice.toFixed(2)}
+                {formatPrice(oldPrice)}
               </span>
             </div>
           </div>

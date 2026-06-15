@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint ."
+    "start": "node server.cjs",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "db:install": "node scripts/install-mysql.mjs",
+    "setup:admin": "node scripts/setup-admin.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -41,15 +44,19 @@
     "@stripe/stripe-js": "^5.5.0",
     "@supabase/supabase-js": "^2.106.2",
     "@t3-oss/env-nextjs": "^0.12.0",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
+    "cookie": "^1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.2",
     "framer-motion": "^12.0.6",
     "input-otp": "^1.4.2",
+    "jose": "^6.2.3",
     "lucide-react": "^0.577.0",
     "micro": "^10.0.1",
+    "mysql2": "^3.22.5",
     "next": "^15.5.18",
     "next-themes": "^0.4.4",
     "posthog-js": "^1.379.0",

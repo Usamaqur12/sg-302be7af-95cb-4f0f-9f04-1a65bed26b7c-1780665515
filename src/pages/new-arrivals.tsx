@@ -28,6 +28,7 @@ export default function NewArrivalsPage() {
           title,
           price,
           compare_at_price,
+          deal_expires_at,
           rating,
           total_reviews,
           created_at,
@@ -126,6 +127,7 @@ export default function NewArrivalsPage() {
                 reviewCount={product.total_reviews || 0}
                 sellerName={(product.seller as any)?.business_name || "Unknown Seller"}
                 sellerId={(product.seller as any)?.id}
+                dealExpiresAt={product.deal_expires_at}
               />
             ))}
           </div>

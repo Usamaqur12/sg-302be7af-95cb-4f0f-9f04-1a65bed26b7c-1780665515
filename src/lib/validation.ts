@@ -74,7 +74,16 @@ export const createOrderSchema = z.object({
   shipping_zip_code: z.string().min(5),
   shipping_country: z.string().min(2),
   
-  payment_method: z.enum(["card", "paypal", "bank_transfer", "cash_on_delivery"]),
+  payment_method: z.enum([
+    "card",
+    "paypal",
+    "bank_transfer",
+    "jazzcash",
+    "easypaisa",
+    "cash_on_delivery",
+  ]),
+  payment_reference: z.string().max(191).optional(),
+  payment_proof_url: z.string().optional(),
   customer_notes: z.string().optional(),
 });
 
@@ -85,11 +94,19 @@ export const createOrderSchema = z.object({
 export const createVendorSchema = z.object({
   business_name: z.string().min(2, "Business name must be at least 2 characters"),
   description: z.string().min(20, "Description must be at least 20 characters"),
-  business_type: z.enum(["individual", "company", "partnership"]),
   business_address: z.string().min(10, "Business address must be at least 10 characters"),
+  business_email: emailSchema,
+  business_phone: phoneSchema,
+  bank_account_name: z.string().min(2, "Account holder name is required"),
   bank_account_number: z.string().min(5, "Bank account number is required"),
   bank_name: z.string().min(2, "Bank name is required"),
-  bank_routing_number: z.string().optional(),
+});
+
+export const sellerRegistrationSchema = createVendorSchema.extend({
+  full_name: z.string().min(2, "Full name must be at least 2 characters"),
+  email: emailSchema,
+  phone: phoneSchema,
+  password: passwordSchema,
 });
 
 // =====================================================

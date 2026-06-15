@@ -1,44 +1,41 @@
 import { SellerLayout } from "@/components/SellerLayout";
+import { RoleGuard } from "@/components/RoleGuard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import type { Database } from "@/integrations/supabase/database.types";
+import { sellerCenterModules } from "@/lib/seller-center";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/router";
+
+type ProductStatus = Database["public"]["Enums"]["product_status"];
 
 interface Product {
   id: string;
   title: string;
   price: number;
   stock_quantity: number;
-  status: string;
+  status: ProductStatus;
   images: { url: string }[];
 }
 
 export default function SellerProducts() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuthContext();
+  const { formatPrice } = useMarketplaceSettings();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ProductStatus | "all">("all");
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/");
-      return;
-    }
-
-    if (user) {
-      fetchProducts();
-    }
-  }, [user, authLoading, router]);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     if (!user) return;
 
     const { data: sellerProfile } = await supabase
@@ -47,7 +44,11 @@ export default function SellerProducts() {
       .eq("user_id", user.id)
       .single();
 
-    if (!sellerProfile) return;
+    if (!sellerProfile) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
 
     const { data: productsData } = await supabase
       .from("products")
@@ -62,9 +63,33 @@ export default function SellerProducts() {
       .eq("seller_id", sellerProfile.id)
       .order("created_at", { ascending: false });
 
-    setProducts((productsData as any) || []);
+    const products = ((productsData ?? []) as unknown as Product[]).map((product) => ({
+      ...product,
+      images: product.images ?? [],
+      status: product.status ?? "pending",
+      stock_quantity: product.stock_quantity ?? 0,
+    }));
+
+    setProducts(products);
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    fetchProducts();
+  }, [authLoading, fetchProducts, user]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const status = Array.isArray(router.query.status) ? router.query.status[0] : router.query.status;
+    if (["draft", "pending", "approved", "rejected", "inactive"].includes(String(status))) {
+      setStatusFilter(status as ProductStatus);
+    } else {
+      setStatusFilter("all");
+    }
+  }, [router.isReady, router.query.status]);
 
   const deleteProduct = async (productId: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
@@ -73,22 +98,43 @@ export default function SellerProducts() {
     fetchProducts();
   };
 
-  const filteredProducts = products.filter((product) =>
-    product.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const setProductStatusFilter = (status: ProductStatus | "all") => {
+    setStatusFilter(status);
+    void router.replace(
+      {
+        pathname: "/seller/products",
+        query: status === "all" ? {} : { status },
+      },
+      undefined,
+      { shallow: true }
+    );
+  };
 
-  if (authLoading || loading) {
+  const activeView = Array.isArray(router.query.view) ? router.query.view[0] : router.query.view;
+  const productModule = sellerCenterModules.find((module) => module.href === "/seller/products");
+  const activeTool = productModule?.options.find((option) => option.href.includes(`view=${activeView}`));
+
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch = product.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "all" || product.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  if (authLoading || (user && loading)) {
     return (
-      <SellerLayout>
-        <div className="text-center py-16">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </SellerLayout>
+      <RoleGuard allowedRoles={["seller"]}>
+        <SellerLayout>
+          <div className="text-center py-16">
+            <p className="text-muted-foreground">Loading products...</p>
+          </div>
+        </SellerLayout>
+      </RoleGuard>
     );
   }
 
   return (
-    <SellerLayout>
+    <RoleGuard allowedRoles={["seller"]}>
+      <SellerLayout>
       <div>
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold">Products</h1>
@@ -101,7 +147,13 @@ export default function SellerProducts() {
         </div>
 
         <Card className="p-4 mb-6">
-          <div className="relative">
+          {activeTool && (
+            <div className="mb-4 rounded-md border bg-muted/50 p-4">
+              <p className="font-semibold">{activeTool.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{activeTool.description}</p>
+            </div>
+          )}
+          <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search products..."
@@ -109,6 +161,19 @@ export default function SellerProducts() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(["all", "pending", "approved", "rejected", "draft", "inactive"] as Array<ProductStatus | "all">).map((status) => (
+              <Button
+                key={status}
+                type="button"
+                size="sm"
+                variant={statusFilter === status ? "default" : "outline"}
+                onClick={() => setProductStatusFilter(status)}
+              >
+                {status === "all" ? "All" : status}
+              </Button>
+            ))}
           </div>
         </Card>
 
@@ -142,7 +207,7 @@ export default function SellerProducts() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold font-mono">${product.price.toFixed(2)}</p>
+                        <p className="text-xl font-bold font-mono">{formatPrice(product.price)}</p>
                         <Badge
                           className={
                             product.status === "approved"
@@ -180,6 +245,7 @@ export default function SellerProducts() {
           </div>
         )}
       </div>
-    </SellerLayout>
+      </SellerLayout>
+    </RoleGuard>
   );
 }

@@ -28,15 +28,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "POST") {
-      // Create new product (vendor only)
-      const productData = req.body;
-      const product = await productService.createProduct(productData);
-      return res.status(201).json(successResponse("Product created successfully", product));
+      return res
+        .status(403)
+        .json(errorResponse("Create products from the seller portal so approval and ownership rules are enforced"));
     }
 
     return res.status(405).json(errorResponse("Method not allowed"));
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Products API error:", error);
-    return res.status(500).json(errorResponse(error.message || "Internal server error"));
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return res.status(500).json(errorResponse(message));
   }
 }
