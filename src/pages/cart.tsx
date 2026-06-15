@@ -1,16 +1,58 @@
 import { CustomerLayout } from "@/components/CustomerLayout";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/contexts/CartContext";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
+import { calculatePromotionSummary, type PromotionSummary } from "@/lib/promotions";
 import { Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { useEffect, useMemo, useState } from "react";
 
 export default function CartPage() {
   const { items, itemCount, total, updateQuantity, removeFromCart } = useCart();
+  const { formatPrice } = useMarketplaceSettings();
   const router = useRouter();
+  const promotionItems = useMemo(
+    () =>
+      items.map((item) => ({
+        product_id: item.product_id,
+        seller_id: item.product.seller?.id,
+        price: item.product.price,
+        quantity: item.quantity,
+        title: item.product.title,
+      })),
+    [items]
+  );
+  const fallbackSummary = useMemo(() => calculatePromotionSummary(promotionItems, []), [promotionItems]);
+  const [promotionSummary, setPromotionSummary] = useState<PromotionSummary>(fallbackSummary);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPromotionSummary(fallbackSummary);
+    if (!items.length) return;
+
+    fetch("/api/promotions/cart-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ items: promotionItems }),
+    })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!cancelled && payload.summary) setPromotionSummary(payload.summary);
+      })
+      .catch(() => {
+        if (!cancelled) setPromotionSummary(fallbackSummary);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fallbackSummary, items.length, promotionItems]);
 
   if (items.length === 0) {
     return (
@@ -83,7 +125,7 @@ export default function CartPage() {
 
                       <div className="flex items-center gap-4">
                         <span className="text-xl font-bold font-mono">
-                          ${(item.product.price * item.quantity).toFixed(2)}
+                          {formatPrice(item.product.price * item.quantity)}
                         </span>
                         <Button
                           variant="ghost"
@@ -113,27 +155,47 @@ export default function CartPage() {
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal ({itemCount} items)</span>
-                  <span className="font-mono">${total.toFixed(2)}</span>
+                  <span className="font-mono">{formatPrice(promotionSummary.subtotal || total)}</span>
                 </div>
+                {promotionSummary.productDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-green-700">
+                    <span>Promotion discount</span>
+                    <span className="font-mono">-{formatPrice(promotionSummary.productDiscount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Shipping</span>
                   <span className="font-mono">
-                    {total >= 50 ? "FREE" : "$5.00"}
+                    {promotionSummary.shipping === 0 ? "FREE" : formatPrice(promotionSummary.shipping)}
                   </span>
                 </div>
+                {promotionSummary.shippingDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-green-700">
+                    <span>Shipping offer</span>
+                    <span className="font-mono">-{formatPrice(promotionSummary.shippingDiscount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tax</span>
-                  <span className="font-mono">${(total * 0.08).toFixed(2)}</span>
+                  <span className="font-mono">{formatPrice(promotionSummary.tax)}</span>
                 </div>
               </div>
+
+              {promotionSummary.appliedPromotions.length > 0 && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {promotionSummary.appliedPromotions.map((promotion) => (
+                    <Badge key={promotion.id} className="bg-green-500/10 text-green-700">
+                      {promotion.title}
+                    </Badge>
+                  ))}
+                </div>
+              )}
 
               <Separator className="my-4" />
 
               <div className="flex justify-between text-lg font-bold mb-6">
                 <span>Total</span>
-                <span className="font-mono">
-                  ${(total + (total >= 50 ? 0 : 5) + total * 0.08).toFixed(2)}
-                </span>
+                <span className="font-mono">{formatPrice(promotionSummary.total)}</span>
               </div>
 
               <Button
@@ -153,9 +215,9 @@ export default function CartPage() {
                 Continue Shopping
               </Button>
 
-              {total < 50 && (
+              {promotionSummary.subtotal < 50 && promotionSummary.shipping > 0 && (
                 <p className="text-sm text-muted-foreground text-center mt-4">
-                  Add ${(50 - total).toFixed(2)} more for FREE shipping
+                  Add {formatPrice(50 - promotionSummary.subtotal)} more for FREE shipping
                 </p>
               )}
             </Card>

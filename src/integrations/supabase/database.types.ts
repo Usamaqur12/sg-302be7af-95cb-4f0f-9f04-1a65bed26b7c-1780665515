@@ -119,6 +119,50 @@ export type Database = {
           },
         ]
       }
+      customer_addresses: {
+        Row: {
+          city: string
+          country: string
+          created_at: string | null
+          id: string
+          postal_code: string
+          state: string
+          street: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          city: string
+          country: string
+          created_at?: string | null
+          id?: string
+          postal_code: string
+          state: string
+          street: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          city?: string
+          country?: string
+          created_at?: string | null
+          id?: string
+          postal_code?: string
+          state?: string
+          street?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_addresses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string | null
@@ -402,6 +446,7 @@ export type Database = {
           order_id: string
           paid_at: string | null
           payment_method: string
+          payment_proof_url: string | null
           status: Database["public"]["Enums"]["payment_status"] | null
           transaction_id: string | null
         }
@@ -412,6 +457,7 @@ export type Database = {
           order_id: string
           paid_at?: string | null
           payment_method: string
+          payment_proof_url?: string | null
           status?: Database["public"]["Enums"]["payment_status"] | null
           transaction_id?: string | null
         }
@@ -422,6 +468,7 @@ export type Database = {
           order_id?: string
           paid_at?: string | null
           payment_method?: string
+          payment_proof_url?: string | null
           status?: Database["public"]["Enums"]["payment_status"] | null
           transaction_id?: string | null
         }
@@ -583,6 +630,10 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean | null
+          cnic_number: string | null
+          cnic_front_url: string | null
+          cnic_back_url: string | null
+          kyc_document_url: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
           updated_at: string | null
@@ -594,6 +645,10 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean | null
+          cnic_number?: string | null
+          cnic_front_url?: string | null
+          cnic_back_url?: string | null
+          kyc_document_url?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           updated_at?: string | null
@@ -605,6 +660,10 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean | null
+          cnic_number?: string | null
+          cnic_front_url?: string | null
+          cnic_back_url?: string | null
+          kyc_document_url?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           updated_at?: string | null
@@ -738,9 +797,21 @@ export type Database = {
           kyc_document_type: string | null
           kyc_document_url: string | null
           logo_url: string | null
+          owner_cnic: string | null
+          owner_full_name: string | null
+          cnic_front_url: string | null
+          cnic_back_url: string | null
+          business_registration_url: string | null
+          tax_certificate_url: string | null
+          bank_statement_url: string | null
+          brand_authorization_url: string | null
+          pickup_address: string | null
+          return_address: string | null
           rating: number | null
           rejection_reason: string | null
+          seller_center_enabled_options: string | null
           status: Database["public"]["Enums"]["seller_status"] | null
+          storefront_config: string | null
           tax_id: string | null
           total_earnings: number | null
           total_reviews: number | null
@@ -766,9 +837,21 @@ export type Database = {
           kyc_document_type?: string | null
           kyc_document_url?: string | null
           logo_url?: string | null
+          owner_cnic?: string | null
+          owner_full_name?: string | null
+          cnic_front_url?: string | null
+          cnic_back_url?: string | null
+          business_registration_url?: string | null
+          tax_certificate_url?: string | null
+          bank_statement_url?: string | null
+          brand_authorization_url?: string | null
+          pickup_address?: string | null
+          return_address?: string | null
           rating?: number | null
           rejection_reason?: string | null
+          seller_center_enabled_options?: string | null
           status?: Database["public"]["Enums"]["seller_status"] | null
+          storefront_config?: string | null
           tax_id?: string | null
           total_earnings?: number | null
           total_reviews?: number | null
@@ -794,9 +877,21 @@ export type Database = {
           kyc_document_type?: string | null
           kyc_document_url?: string | null
           logo_url?: string | null
+          owner_cnic?: string | null
+          owner_full_name?: string | null
+          cnic_front_url?: string | null
+          cnic_back_url?: string | null
+          business_registration_url?: string | null
+          tax_certificate_url?: string | null
+          bank_statement_url?: string | null
+          brand_authorization_url?: string | null
+          pickup_address?: string | null
+          return_address?: string | null
           rating?: number | null
           rejection_reason?: string | null
+          seller_center_enabled_options?: string | null
           status?: Database["public"]["Enums"]["seller_status"] | null
+          storefront_config?: string | null
           tax_id?: string | null
           total_earnings?: number | null
           total_reviews?: number | null
@@ -1079,7 +1174,7 @@ export type Database = {
       product_status: "draft" | "pending" | "approved" | "rejected" | "inactive"
       seller_status: "pending" | "approved" | "rejected" | "suspended"
       ticket_status: "open" | "in_progress" | "resolved" | "closed"
-      user_role: "customer" | "seller" | "admin"
+      user_role: "customer" | "seller" | "admin" | "manager" | "warehouse"
       withdrawal_status: "pending" | "approved" | "rejected" | "completed"
     }
     CompositeTypes: {
@@ -1221,7 +1316,7 @@ export const Constants = {
       product_status: ["draft", "pending", "approved", "rejected", "inactive"],
       seller_status: ["pending", "approved", "rejected", "suspended"],
       ticket_status: ["open", "in_progress", "resolved", "closed"],
-      user_role: ["customer", "seller", "admin"],
+      user_role: ["customer", "seller", "admin", "manager", "warehouse"],
       withdrawal_status: ["pending", "approved", "rejected", "completed"],
     },
   },

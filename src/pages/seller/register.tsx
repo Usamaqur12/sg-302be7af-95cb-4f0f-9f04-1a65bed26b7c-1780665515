@@ -6,14 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { Store, Upload, Shield, CheckCircle2, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Store, Shield, CheckCircle2, Loader2 } from "lucide-react";
+
+interface RegistrationResponse {
+  success: boolean;
+  message: string;
+  errors?: Array<{ field?: string; message: string }>;
+}
 
 export default function SellerRegisterPage() {
   const { toast } = useToast();
@@ -29,10 +34,9 @@ export default function SellerRegisterPage() {
     password: "",
     confirmPassword: "",
 
-    // Business Information  
+    // Business Information
     shopName: "",
     shopDescription: "",
-    businessType: "individual",
 
     // Address
     address: "",
@@ -42,19 +46,16 @@ export default function SellerRegisterPage() {
     country: "United States",
 
     // Bank Details
+    bankAccountName: "",
     bankAccountNumber: "",
     bankName: "",
-    bankRoutingNumber: "",
-
-    // Terms
-    agreeToTerms: false,
   });
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     if (!acceptedTerms) {
@@ -75,10 +76,16 @@ export default function SellerRegisterPage() {
       return;
     }
 
-    if (formData.password.length < 6) {
+    if (
+      formData.password.length < 8 ||
+      !/[A-Z]/.test(formData.password) ||
+      !/[a-z]/.test(formData.password) ||
+      !/[0-9]/.test(formData.password)
+    ) {
       toast({
         title: "Weak Password",
-        description: "Password must be at least 6 characters long.",
+        description:
+          "Use at least 8 characters with uppercase, lowercase, and a number.",
         variant: "destructive",
       });
       return;
@@ -87,65 +94,49 @@ export default function SellerRegisterPage() {
     setLoading(true);
 
     try {
-      // 1. Create auth user with seller role
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-            role: "seller",
-          },
+      const response = await fetch("/api/vendors/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          full_name: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          password: formData.password,
+          business_name: formData.shopName,
+          description: formData.shopDescription,
+          business_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
+          business_email: formData.email,
+          business_phone: formData.phone,
+          bank_account_name: formData.bankAccountName,
+          bank_account_number: formData.bankAccountNumber,
+          bank_name: formData.bankName,
+        }),
       });
 
-      if (authError) throw authError;
+      const result = (await response.json()) as RegistrationResponse;
 
-      if (!authData.user) {
-        throw new Error("User creation failed");
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.errors?.[0]?.message || result.message || "Registration failed"
+        );
       }
-
-      // 2. Create user profile with seller role
-      const { error: userProfileError } = await supabase.from("profiles").insert({
-        id: authData.user.id,
-        email: formData.email,
-        full_name: formData.fullName,
-        phone: formData.phone || null,
-        role: "seller",
-      });
-
-      if (userProfileError) throw userProfileError;
-
-      // 3. Create seller profile with pending status
-      const { error: sellerProfileError } = await supabase.from("seller_profiles").insert({
-        user_id: authData.user.id,
-        business_name: formData.shopName,
-        business_description: formData.shopDescription,
-        business_type: formData.businessType,
-        business_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
-        commission_rate: 12,
-        bank_account_number: formData.bankAccountNumber,
-        bank_name: formData.bankName,
-        bank_routing_number: formData.bankRoutingNumber || null,
-        status: "pending",
-      } as any);
-
-      if (sellerProfileError) throw sellerProfileError;
-
-      // Note: Admin notifications will be enabled after Phase 2 migration adds notifications table
 
       toast({
         title: "Application Submitted!",
-        description: "Your seller application has been created. Please wait for admin approval.",
+        description:
+          "Check your email if confirmation is required, then wait for account approval.",
       });
 
-      // Sign out the new user and redirect to login
-      await supabase.auth.signOut();
       router.push("/seller/login");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Registration Failed",
-        description: error.message || "Could not submit application. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Could not submit application. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -272,19 +263,6 @@ export default function SellerRegisterPage() {
                       required
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="businessType">Business Type *</Label>
-                    <Select value={formData.businessType} onValueChange={(value) => handleChange("businessType", value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select business type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="individual">Individual</SelectItem>
-                        <SelectItem value="company">Company</SelectItem>
-                        <SelectItem value="partnership">Partnership</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <div className="md:col-span-2">
                     <Label htmlFor="shopDescription">Shop Description *</Label>
                     <Textarea
@@ -346,6 +324,15 @@ export default function SellerRegisterPage() {
                 <h3 className="text-lg font-semibold">Bank Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
+                    <Label htmlFor="bankAccountName">Account Holder Name *</Label>
+                    <Input
+                      id="bankAccountName"
+                      value={formData.bankAccountName}
+                      onChange={(e) => handleChange("bankAccountName", e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
                     <Label htmlFor="bankName">Bank Name *</Label>
                     <Input
                       id="bankName"
@@ -361,14 +348,6 @@ export default function SellerRegisterPage() {
                       value={formData.bankAccountNumber}
                       onChange={(e) => handleChange("bankAccountNumber", e.target.value)}
                       required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="bankRoutingNumber">Routing Number (Optional)</Label>
-                    <Input
-                      id="bankRoutingNumber"
-                      value={formData.bankRoutingNumber}
-                      onChange={(e) => handleChange("bankRoutingNumber", e.target.value)}
                     />
                   </div>
                 </div>

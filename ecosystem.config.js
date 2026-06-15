@@ -1,8 +1,11 @@
 module.exports = {
   apps: [{
-    name: 'nextjs',
-    script: 'npm',
-    args: 'run dev',
+    name: 'marketplace',
+    script: 'server.cjs',
     autorestart: true,
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000,
+    },
   }]
 };

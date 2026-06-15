@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCart } from "@/contexts/CartContext";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { X, Plus, Minus, ShoppingBag, ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,6 +17,7 @@ interface CartDrawerProps {
 
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const { items, updateQuantity, removeFromCart, total: cartTotal } = useCart();
+  const { formatPrice } = useMarketplaceSettings();
 
   const subtotal = cartTotal;
   const shipping = subtotal > 50 ? 0 : 5.99;
@@ -111,7 +113,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
 
                           {/* Price */}
                           <span className="text-sm font-bold font-mono">
-                            ${itemTotal.toFixed(2)}
+                            {formatPrice(itemTotal)}
                           </span>
                         </div>
                       </div>
@@ -126,7 +128,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-medium font-mono">${subtotal.toFixed(2)}</span>
+                  <span className="font-medium font-mono">{formatPrice(subtotal)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Shipping</span>
@@ -134,13 +136,13 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                     {shipping === 0 ? (
                       <span className="text-green-600">FREE</span>
                     ) : (
-                      `$${shipping.toFixed(2)}`
+                      formatPrice(shipping)
                     )}
                   </span>
                 </div>
                 {subtotal > 0 && subtotal < 50 && (
                   <p className="text-xs text-amber-600">
-                    Add ${(50 - subtotal).toFixed(2)} more for free shipping
+                    Add {formatPrice(50 - subtotal)} more for free shipping
                   </p>
                 )}
               </div>
@@ -149,7 +151,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
 
               <div className="flex items-center justify-between">
                 <span className="font-semibold">Total</span>
-                <span className="text-2xl font-bold font-mono">${total.toFixed(2)}</span>
+                <span className="text-2xl font-bold font-mono">{formatPrice(total)}</span>
               </div>
 
               <div className="space-y-2">

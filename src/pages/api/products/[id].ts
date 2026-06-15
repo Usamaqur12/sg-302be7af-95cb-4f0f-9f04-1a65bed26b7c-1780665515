@@ -10,29 +10,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Get single product
       const product = await productService.getProductById(id as string);
       
-      if (!product) {
+      if (!product || product.status !== "approved") {
         return res.status(404).json(notFoundResponse("Product"));
       }
 
       return res.status(200).json(successResponse("Product retrieved successfully", product));
     }
 
-    if (req.method === "PUT") {
-      // Update product
-      const updates = req.body;
-      const product = await productService.updateProduct(id as string, updates);
-      return res.status(200).json(successResponse("Product updated successfully", product));
-    }
-
-    if (req.method === "DELETE") {
-      // Delete product
-      await productService.deleteProduct(id as string);
-      return res.status(200).json(successResponse("Product deleted successfully"));
+    if (req.method === "PUT" || req.method === "DELETE") {
+      return res
+        .status(403)
+        .json(errorResponse("Manage products from the admin or seller portal so ownership rules are enforced"));
     }
 
     return res.status(405).json(errorResponse("Method not allowed"));
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Product API error:", error);
-    return res.status(500).json(errorResponse(error.message || "Internal server error"));
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return res.status(500).json(errorResponse(message));
   }
 }

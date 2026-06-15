@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductCard } from "@/components/ProductCard";
+import { CountdownTimer } from "@/components/CountdownTimer";
 import { ReviewForm } from "@/components/ReviewForm";
 import { ReviewList } from "@/components/ReviewList";
 import { useCart } from "@/contexts/CartContext";
@@ -18,7 +19,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { 
   Star, Heart, ShoppingCart, TruckIcon, Package, 
-  ShieldCheck, RefreshCcw, Share2, Minus, Plus, Store, ChevronLeft, Loader2
+  ShieldCheck, RefreshCcw, Share2, Minus, Plus, Store, ChevronLeft, Loader2, Timer
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -83,6 +84,7 @@ export default function ProductDetailPage() {
             title,
             price,
             compare_at_price,
+            deal_expires_at,
             rating,
             total_reviews,
             images:product_images(url),
@@ -166,6 +168,8 @@ export default function ProductDetailPage() {
   const discount = product.compare_at_price && product.compare_at_price > product.price
     ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100)
     : 0;
+  const dealEndDate = product.deal_expires_at ? new Date(product.deal_expires_at) : null;
+  const showDealCountdown = dealEndDate && dealEndDate.getTime() > Date.now();
 
   const images = product.images || [];
   const selectedImageUrl = images[selectedImage]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800";
@@ -285,6 +289,15 @@ export default function ProductDetailPage() {
                 <p className="text-sm text-amber-600 font-medium">
                   Only {product.stock_quantity} left in stock - order soon!
                 </p>
+              )}
+              {showDealCountdown && dealEndDate && (
+                <div className="mt-4 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-destructive">
+                    <Timer className="h-4 w-4" />
+                    Sale countdown
+                  </div>
+                  <CountdownTimer endDate={dealEndDate} />
+                </div>
               )}
             </div>
 
@@ -501,6 +514,7 @@ export default function ProductDetailPage() {
                   reviewCount={relatedProduct.total_reviews || 0}
                   sellerName={relatedProduct.seller?.business_name || "Unknown Seller"}
                   sellerId={relatedProduct.seller?.id}
+                  dealExpiresAt={relatedProduct.deal_expires_at}
                 />
               ))}
             </div>

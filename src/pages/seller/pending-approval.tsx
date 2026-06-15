@@ -1,7 +1,7 @@
 "use client";
 
 import { SellerLayout } from "@/components/SellerLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Clock, Mail, Phone, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ export default function PendingApprovalPage() {
                 </div>
                 <h1 className="text-3xl font-bold mb-2">Application Under Review</h1>
                 <p className="text-lg text-muted-foreground">
-                  Your seller account is pending admin approval
+                  Your seller account is pending account approval
                 </p>
               </div>
 

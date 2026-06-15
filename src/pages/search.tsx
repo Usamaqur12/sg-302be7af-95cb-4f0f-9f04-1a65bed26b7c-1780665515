@@ -21,24 +21,33 @@ import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 import { searchProducts, type SearchFilters } from "@/lib/search";
 import { analytics } from "@/lib/analytics";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 
 interface Product {
   id: string;
   title: string;
   price: number;
   compare_at_price: number | null;
+  deal_expires_at: string | null;
+  sponsoredCampaign?: {
+    id: string;
+    name: string;
+    adScore: number;
+  };
   rating: number;
   total_reviews: number;
   images: { url: string }[];
-  seller: { business_name: string };
+  seller: { id?: string; business_name: string } | null;
 }
 
 export default function SearchPage() {
   const router = useRouter();
+  const { formatPrice } = useMarketplaceSettings();
   const { q, categoryId, minPrice, maxPrice, minRating } = router.query;
 
   const [searchQuery, setSearchQuery] = useState((q as string) || "");
   const [products, setProducts] = useState<Product[]>([]);
+  const [sponsoredProducts, setSponsoredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalResults, setTotalResults] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
@@ -74,6 +83,7 @@ export default function SearchPage() {
 
     const results = await searchProducts(searchFilters);
     setProducts(results.products);
+    setSponsoredProducts(results.sponsoredProducts || []);
     setTotalResults(results.total);
     setLoading(false);
 
@@ -314,7 +324,7 @@ export default function SearchPage() {
                 )}
                 {filters.minPrice && (
                   <Badge variant="secondary" className="gap-2">
-                    Min: ${filters.minPrice}
+                    Min: {formatPrice(filters.minPrice)}
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => {
@@ -326,7 +336,7 @@ export default function SearchPage() {
                 )}
                 {filters.maxPrice && (
                   <Badge variant="secondary" className="gap-2">
-                    Max: ${filters.maxPrice}
+                    Max: {formatPrice(filters.maxPrice)}
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => {
@@ -358,21 +368,63 @@ export default function SearchPage() {
                   <Card key={i} className="h-96 animate-pulse bg-muted" />
                 ))}
               </div>
-            ) : products.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {products.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    id={product.id}
-                    title={product.title}
-                    price={product.price}
-                    compareAtPrice={product.compare_at_price || undefined}
-                    image={product.images[0]?.url || "/placeholder.png"}
-                    rating={product.rating}
-                    reviewCount={product.total_reviews}
-                    sellerName={product.seller.business_name}
-                  />
-                ))}
+            ) : products.length > 0 || sponsoredProducts.length > 0 ? (
+              <div className="space-y-8">
+                {sponsoredProducts.length > 0 && (
+                  <section>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-semibold">Sponsored Products</h2>
+                        <p className="text-sm text-muted-foreground">
+                          Admin-approved ads ranked by relevance, bid, budget, product quality and seller health.
+                        </p>
+                      </div>
+                      <Badge variant="outline">Ad</Badge>
+                    </div>
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {sponsoredProducts.map((product) => (
+                        <ProductCard
+                          key={`sponsored-${product.sponsoredCampaign?.id || product.id}`}
+                          id={product.id}
+                          title={product.title}
+                          price={product.price}
+                          compareAtPrice={product.compare_at_price || undefined}
+                          image={product.images[0]?.url || "/placeholder.png"}
+                          rating={product.rating}
+                          reviewCount={product.total_reviews}
+                          sellerName={product.seller?.business_name || "Unknown Seller"}
+                          sellerId={product.seller?.id}
+                          dealExpiresAt={product.deal_expires_at}
+                          sponsored
+                          sponsoredCampaignId={product.sponsoredCampaign?.id}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {products.length > 0 && (
+                  <section>
+                    <h2 className="mb-4 text-lg font-semibold">Organic Results</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {products.map((product) => (
+                        <ProductCard
+                          key={product.id}
+                          id={product.id}
+                          title={product.title}
+                          price={product.price}
+                          compareAtPrice={product.compare_at_price || undefined}
+                          image={product.images[0]?.url || "/placeholder.png"}
+                          rating={product.rating}
+                          reviewCount={product.total_reviews}
+                          sellerName={product.seller?.business_name || "Unknown Seller"}
+                          sellerId={product.seller?.id}
+                          dealExpiresAt={product.deal_expires_at}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
             ) : (
               <Card className="p-12 text-center">

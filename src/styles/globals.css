@@ -13,40 +13,40 @@
 @layer base {
   :root {
     --radius: 0.5rem;
-    --background: 40 40% 97%;
-    --foreground: 222 47% 11%;
+    --background: 210 33% 96%;
+    --foreground: 222 52% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 222 52% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 222 47% 11%;
+    --popover-foreground: 222 52% 10%;
+    --primary: 214 68% 15%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 13% 91%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 13% 91%;
-    --muted-foreground: 222 30% 40%;
-    --accent: 14 80% 58%;
-    --accent-foreground: 0 0% 100%;
+    --secondary: 210 24% 91%;
+    --secondary-foreground: 222 52% 10%;
+    --muted: 210 22% 91%;
+    --muted-foreground: 216 22% 36%;
+    --accent: 38 96% 50%;
+    --accent-foreground: 222 52% 10%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 85%;
-    --input: 220 13% 85%;
-    --ring: 14 80% 58%;
+    --border: 214 20% 84%;
+    --input: 214 20% 84%;
+    --ring: 38 96% 50%;
     --warning: 45 93% 47%;
-    --warning-foreground: 222 47% 11%;
-    --chart-1: 14 80% 58%;
-    --chart-2: 222 47% 11%;
+    --warning-foreground: 222 52% 10%;
+    --chart-1: 38 96% 50%;
+    --chart-2: 214 68% 15%;
     --chart-3: 45 93% 47%;
-    --chart-4: 220 13% 70%;
-    --chart-5: 40 40% 80%;
+    --chart-4: 173 66% 36%;
+    --chart-5: 214 20% 64%;
     --sidebar: 0 0% 100%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 222 47% 11%;
+    --sidebar-foreground: 222 52% 10%;
+    --sidebar-primary: 214 68% 15%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 13% 91%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 220 13% 85%;
-    --sidebar-ring: 14 80% 58%;
+    --sidebar-accent: 38 96% 50%;
+    --sidebar-accent-foreground: 222 52% 10%;
+    --sidebar-border: 214 20% 84%;
+    --sidebar-ring: 38 96% 50%;
   }
 
   .dark {
@@ -90,10 +90,11 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
 }
 

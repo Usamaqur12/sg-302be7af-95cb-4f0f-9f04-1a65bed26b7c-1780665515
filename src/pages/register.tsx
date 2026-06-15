@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { CustomerLayout } from "@/components/CustomerLayout";
@@ -9,14 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ShoppingBag } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { signUp } = useAuthContext();
   const { toast } = useToast();
 
   const [fullName, setFullName] = useState("");
@@ -49,10 +48,16 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 6) {
+    if (
+      password.length < 8 ||
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password)
+    ) {
       toast({
         title: "Weak Password",
-        description: "Password must be at least 6 characters long.",
+        description:
+          "Use at least 8 characters with uppercase, lowercase, and a number.",
         variant: "destructive",
       });
       return;
@@ -61,57 +66,34 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // 1. Create auth user with customer role
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: "customer",
-          },
-        },
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: fullName,
+          email,
+          phone: phone || undefined,
+          password,
+        }),
       });
 
-      if (authError) throw authError;
-
-      if (!authData.user) {
-        throw new Error("User creation failed");
-      }
-
-      // 2. Create customer profile
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: authData.user.id,
-        email: email,
-        full_name: fullName,
-        phone: phone || null,
-        role: "customer",
-      });
-
-      if (profileError) throw profileError;
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "User creation failed");
 
       toast({
         title: "Account Created!",
-        description: "Welcome to the marketplace. You can now log in.",
+        description: "You can now sign in to Mercato.",
       });
 
-      // Sign user in automatically
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        // If auto sign-in fails, redirect to login
-        router.push("/login");
-      } else {
-        router.push("/account/dashboard");
-      }
-    } catch (error: any) {
-      console.error("Registration error:", error);
+      router.push("/login");
+    } catch (error: unknown) {
       toast({
         title: "Registration Failed",
-        description: error.message || "Could not create account. Please try again.",
+        description: getErrorMessage(
+          error,
+          "Could not create account. Please try again."
+        ),
         variant: "destructive",
       });
     } finally {
@@ -235,7 +217,7 @@ export default function RegisterPage() {
 
               <div className="text-center text-sm">
                 <Link href="/seller/register" className="text-primary hover:underline">
-                  Want to sell on our marketplace? Register as a seller →
+                  Want to sell on our marketplace? Register as a seller
                 </Link>
               </div>
             </form>

@@ -1,18 +1,26 @@
 "use client";
 
 import { CustomerLayout } from "@/components/CustomerLayout";
+import { PublicPageSections } from "@/components/PublicPageContent";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePublicPage } from "@/hooks/usePublicPage";
 import { useToast } from "@/hooks/use-toast";
+import { getDefaultPublicPage } from "@/lib/public-pages";
 import { Mail, Phone, Clock, MapPin, Send } from "lucide-react";
 import { useState } from "react";
 
+const fallback = getDefaultPublicPage("contact");
+
 export default function ContactPage() {
   const { toast } = useToast();
+  const { page } = usePublicPage("contact", fallback);
+  const currentPage = page || fallback;
+  const contact = currentPage.contact || {};
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -56,12 +64,17 @@ export default function ContactPage() {
       <div className="container py-16">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
+          <h1 className="text-4xl font-bold mb-4">{currentPage.title}</h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Have a question or need assistance? We're here to help. Send us a message
-            and we'll respond as soon as possible.
+            {currentPage.summary}
           </p>
         </div>
+
+        {currentPage.sections.length > 0 && (
+          <div className="mx-auto mb-8 max-w-6xl">
+            <PublicPageSections page={currentPage} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Contact Information */}
@@ -78,10 +91,10 @@ export default function ContactPage() {
                       For general inquiries
                     </p>
                     <a
-                      href="mailto:support@marketplace.com"
+                      href={`mailto:${contact.email || "support@marketplace.com"}`}
                       className="text-sm text-accent hover:underline"
                     >
-                      support@marketplace.com
+                      {contact.email || "support@marketplace.com"}
                     </a>
                   </div>
                 </div>
@@ -100,10 +113,10 @@ export default function ContactPage() {
                       For urgent support
                     </p>
                     <a
-                      href="tel:+1234567890"
+                      href={`tel:${contact.phone || "+923000000000"}`}
                       className="text-sm text-accent hover:underline"
                     >
-                      +1 (234) 567-890
+                      {contact.phone || "+92 300 0000000"}
                     </a>
                   </div>
                 </div>
@@ -118,13 +131,9 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold mb-1">Business Hours</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Monday - Friday: 9am - 6pm EST
+                    <p className="whitespace-pre-line text-sm text-muted-foreground">
+                      {contact.hours || "Monday - Saturday, 9:00 AM - 6:00 PM"}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      Saturday: 10am - 4pm EST
-                    </p>
-                    <p className="text-sm text-muted-foreground">Sunday: Closed</p>
                   </div>
                 </div>
               </CardContent>
@@ -138,12 +147,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold mb-1">Visit Us</h3>
-                    <p className="text-sm text-muted-foreground">
-                      123 Commerce Street
-                      <br />
-                      Suite 456
-                      <br />
-                      New York, NY 10001
+                    <p className="whitespace-pre-line text-sm text-muted-foreground">
+                      {contact.address || "Karachi, Pakistan"}
                     </p>
                   </div>
                 </div>

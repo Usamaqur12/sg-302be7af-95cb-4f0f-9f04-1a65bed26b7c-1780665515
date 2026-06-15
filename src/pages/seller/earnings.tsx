@@ -1,15 +1,22 @@
 import { SellerLayout } from "@/components/SellerLayout";
+import { RoleGuard } from "@/components/RoleGuard";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import { DollarSign, TrendingUp, Download } from "lucide-react";
+import type { Database } from "@/integrations/supabase/database.types";
+import { useCallback, useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import { DollarSign, TrendingUp, Download, FileText, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
+import { useRouter } from "next/router";
+
+type WithdrawalRequest = Database["public"]["Tables"]["withdrawal_requests"]["Row"];
 
 interface EarningsData {
   totalEarnings: number;
@@ -18,18 +25,11 @@ interface EarningsData {
   pendingWithdrawals: number;
 }
 
-interface WithdrawalRequest {
-  id: string;
-  amount: number;
-  status: string;
-  created_at: string;
-  processed_at: string | null;
-}
-
 export default function SellerEarnings() {
-  const { user } = useAuth();
-  const router = useRouter();
+  const { user, loading: authLoading } = useAuthContext();
+  const { formatPrice } = useMarketplaceSettings();
   const { toast } = useToast();
+  const router = useRouter();
   const [earnings, setEarnings] = useState<EarningsData>({
     totalEarnings: 0,
     totalCommission: 0,
@@ -40,65 +40,72 @@ export default function SellerEarnings() {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [payoutHoldDays, setPayoutHoldDays] = useState(2);
+  const activeView = typeof router.query.view === "string" ? router.query.view : "my-income";
 
-  useEffect(() => {
-    if (!user) {
-      router.push("/");
-      return;
-    }
-
-    fetchEarnings();
-  }, [user, router]);
-
-  const fetchEarnings = async () => {
+  const fetchEarnings = useCallback(async () => {
     if (!user) return;
 
     const { data: sellerProfile } = await supabase
       .from("seller_profiles")
-      .select("id")
+      .select("id, total_earnings, available_balance")
       .eq("user_id", user.id)
       .single();
 
-    if (!sellerProfile) return;
+    if (!sellerProfile) {
+      setWithdrawals([]);
+      setLoading(false);
+      return;
+    }
 
     const { data: orderItems } = await supabase
       .from("order_items")
       .select("seller_earnings, commission_amount")
       .eq("seller_id", sellerProfile.id);
 
-    const totalEarnings = orderItems?.reduce((sum, item) => sum + (item.seller_earnings || 0), 0) || 0;
     const totalCommission = orderItems?.reduce((sum, item) => sum + (item.commission_amount || 0), 0) || 0;
 
-    const { data: withdrawalRequests } = await supabase
-      .from("withdrawal_requests")
-      .select("*")
-      .eq("seller_id", sellerProfile.id)
-      .order("created_at", { ascending: false });
+    const [{ data: withdrawalRequests }, { data: payoutSetting }] = await Promise.all([
+      supabase
+        .from("withdrawal_requests")
+        .select("*")
+        .eq("seller_id", sellerProfile.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "seller_payout_hold_days")
+        .maybeSingle(),
+    ]);
 
     const pendingWithdrawals = withdrawalRequests?.filter(w => w.status === "pending")
       .reduce((sum, w) => sum + w.amount, 0) || 0;
 
-    const completedWithdrawals = withdrawalRequests?.filter(w => w.status === "completed")
-      .reduce((sum, w) => sum + w.amount, 0) || 0;
-
     setEarnings({
-      totalEarnings,
+      totalEarnings: sellerProfile.total_earnings ?? 0,
       totalCommission,
-      availableBalance: totalEarnings - completedWithdrawals - pendingWithdrawals,
+      availableBalance: sellerProfile.available_balance ?? 0,
       pendingWithdrawals,
     });
 
-    setWithdrawals((withdrawalRequests as any) || []);
+    setWithdrawals(withdrawalRequests || []);
+    setPayoutHoldDays(Math.max(0, Math.min(30, Number(payoutSetting?.value ?? 2) || 2)));
     setLoading(false);
-  };
+  }, [user]);
 
-  const requestWithdrawal = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    fetchEarnings();
+  }, [authLoading, fetchEarnings, user]);
+
+  const requestWithdrawal = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     const amount = parseFloat(withdrawAmount);
 
-    if (amount <= 0 || amount > earnings.availableBalance) {
+    if (!Number.isFinite(amount) || amount <= 0 || amount > earnings.availableBalance) {
       toast({
         title: "Invalid Amount",
         description: "Please enter a valid amount within your available balance",
@@ -116,7 +123,14 @@ export default function SellerEarnings() {
         .eq("user_id", user.id)
         .single();
 
-      if (!sellerProfile) return;
+      if (!sellerProfile) {
+        toast({
+          title: "Seller Profile Missing",
+          description: "Please complete your seller registration before requesting a withdrawal",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const { error } = await supabase
         .from("withdrawal_requests")
@@ -147,20 +161,48 @@ export default function SellerEarnings() {
     }
   };
 
-  if (loading) {
+  if (authLoading || (user && loading)) {
     return (
-      <SellerLayout>
-        <div className="text-center py-16">
-          <p className="text-muted-foreground">Loading earnings...</p>
-        </div>
-      </SellerLayout>
+      <RoleGuard allowedRoles={["seller"]}>
+        <SellerLayout>
+          <div className="text-center py-16">
+            <p className="text-muted-foreground">Loading earnings...</p>
+          </div>
+        </SellerLayout>
+      </RoleGuard>
     );
   }
 
   return (
-    <SellerLayout>
+    <RoleGuard allowedRoles={["seller"]}>
+      <SellerLayout>
       <div>
-        <h1 className="text-3xl font-bold mb-8">Earnings & Payouts</h1>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">My Income</h1>
+          <p className="mt-2 text-muted-foreground">Income overview, release status, seller finance and shared wallet.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Delivered order earnings move to available balance after a {payoutHoldDays}-day review hold.
+          </p>
+        </div>
+
+        <div className="mb-8 grid gap-2 md:grid-cols-3">
+          {[
+            { href: "/seller/earnings", label: "MyIncome", view: "my-income", icon: FileText },
+            { href: "/seller/earnings?view=seller-finance", label: "Seller finance", view: "seller-finance", icon: DollarSign },
+            { href: "/seller/earnings?view=shared-wallet", label: "Shared Wallet", view: "shared-wallet", icon: Wallet },
+          ].map((item) => {
+            const Icon = item.icon;
+            const active = activeView === item.view || (item.view === "my-income" && !router.query.view);
+            return (
+              <Button key={item.href} variant={active ? "default" : "outline"} asChild className="justify-start">
+                <Link href={item.href}>
+                  <Icon className="mr-2 h-4 w-4" />
+                  {item.label}
+                </Link>
+              </Button>
+            );
+          })}
+        </div>
 
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <Card className="p-6">
@@ -168,7 +210,7 @@ export default function SellerEarnings() {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Total Earnings</p>
                 <p className="text-2xl font-bold font-mono text-green-600">
-                  ${earnings.totalEarnings.toFixed(2)}
+                  {formatPrice(earnings.totalEarnings)}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-green-500" />
@@ -180,7 +222,7 @@ export default function SellerEarnings() {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
                 <p className="text-2xl font-bold font-mono">
-                  ${earnings.availableBalance.toFixed(2)}
+                  {formatPrice(earnings.availableBalance)}
                 </p>
               </div>
               <TrendingUp className="h-8 w-8 text-accent" />
@@ -192,13 +234,33 @@ export default function SellerEarnings() {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Platform Commission</p>
                 <p className="text-2xl font-bold font-mono text-muted-foreground">
-                  ${earnings.totalCommission.toFixed(2)}
+                  {formatPrice(earnings.totalCommission)}
                 </p>
               </div>
               <div className="text-sm text-muted-foreground">-{earnings.totalEarnings > 0 ? ((earnings.totalCommission / (earnings.totalEarnings + earnings.totalCommission)) * 100).toFixed(1) : 0}%</div>
             </div>
           </Card>
         </div>
+
+        {activeView === "shared-wallet" && (
+          <Card className="p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4">Shared Wallet</h2>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-md border p-4">
+                <p className="text-sm text-muted-foreground">Marketing Balance</p>
+                <p className="mt-2 text-2xl font-bold">{formatPrice(0)}</p>
+              </div>
+              <div className="rounded-md border p-4">
+                <p className="text-sm text-muted-foreground">Store Earnings</p>
+                <p className="mt-2 text-2xl font-bold">{formatPrice(earnings.availableBalance)}</p>
+              </div>
+              <div className="rounded-md border p-4">
+                <p className="text-sm text-muted-foreground">Top-up Status</p>
+                <p className="mt-2 text-2xl font-bold">Admin review</p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-8 mb-8">
           <Card className="p-6">
@@ -217,29 +279,29 @@ export default function SellerEarnings() {
                   required
                 />
                 <p className="text-sm text-muted-foreground mt-2">
-                  Available: ${earnings.availableBalance.toFixed(2)}
+                  Available: {formatPrice(earnings.availableBalance)}
                 </p>
               </div>
 
               <Button type="submit" disabled={submitting} className="w-full">
                 <Download className="h-4 w-4 mr-2" />
-                {submitting ? "Submitting..." : "Request Withdrawal"}
+                {submitting ? "Submitting..." : "Request Payout"}
               </Button>
             </form>
           </Card>
 
           <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-6">Pending Withdrawals</h2>
+            <h2 className="text-xl font-semibold mb-6">Pending Payouts</h2>
 
             {earnings.pendingWithdrawals > 0 ? (
               <div className="space-y-3">
                 <div className="p-4 bg-warning/10 border border-warning rounded-lg">
                   <p className="font-medium">Total Pending</p>
                   <p className="text-2xl font-bold font-mono text-warning">
-                    ${earnings.pendingWithdrawals.toFixed(2)}
+                    {formatPrice(earnings.pendingWithdrawals)}
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Awaiting admin approval
+                    Awaiting payout approval
                   </p>
                 </div>
               </div>
@@ -250,18 +312,20 @@ export default function SellerEarnings() {
         </div>
 
         <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-6">Withdrawal History</h2>
+          <h2 className="text-xl font-semibold mb-6">Payout History</h2>
 
           {withdrawals.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No withdrawal history</p>
+            <p className="text-muted-foreground text-center py-8">No payout history</p>
           ) : (
             <div className="space-y-3">
               {withdrawals.map((withdrawal) => (
                 <div key={withdrawal.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
                   <div>
-                    <p className="font-medium font-mono">${withdrawal.amount.toFixed(2)}</p>
+                    <p className="font-medium font-mono">{formatPrice(withdrawal.amount)}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(withdrawal.created_at).toLocaleDateString()}
+                      {withdrawal.created_at
+                        ? new Date(withdrawal.created_at).toLocaleDateString()
+                        : "Unknown date"}
                     </p>
                   </div>
                   <Badge
@@ -281,6 +345,7 @@ export default function SellerEarnings() {
           )}
         </Card>
       </div>
-    </SellerLayout>
+      </SellerLayout>
+    </RoleGuard>
   );
 }

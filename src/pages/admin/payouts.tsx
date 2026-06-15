@@ -1,45 +1,39 @@
 import { AdminLayout } from "@/components/AdminLayout";
+import { RoleGuard } from "@/components/RoleGuard";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/database.types";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
+import { useCallback, useEffect, useState } from "react";
 import { CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+type WithdrawalStatus = Database["public"]["Enums"]["withdrawal_status"];
 
 interface WithdrawalRequest {
   id: string;
   amount: number;
-  status: string;
-  created_at: string;
+  status: WithdrawalStatus | null;
+  created_at: string | null;
   completed_at: string | null;
   rejected_at: string | null;
   seller: {
     business_name: string;
-    email: string | null;
-  };
+    business_email: string | null;
+  } | null;
 }
 
 export default function AdminPayouts() {
-  const { user } = useAuth();
-  const router = useRouter();
+  const { user, loading: authLoading } = useAuthContext();
+  const { formatPrice } = useMarketplaceSettings();
   const { toast } = useToast();
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) {
-      router.push("/");
-      return;
-    }
-
-    fetchWithdrawals();
-  }, [user, router]);
-
-  const fetchWithdrawals = async () => {
+  const fetchWithdrawals = useCallback(async () => {
     const { data } = await supabase
       .from("withdrawal_requests")
       .select(`
@@ -49,24 +43,33 @@ export default function AdminPayouts() {
         created_at,
         completed_at,
         rejected_at,
-        seller:seller_profiles(business_name, email)
+        seller:seller_profiles(business_name, business_email)
       `)
       .order("created_at", { ascending: false });
 
-    setWithdrawals((data as any) || []);
+    setWithdrawals((data ?? []) as unknown as WithdrawalRequest[]);
     setLoading(false);
-  };
+  }, []);
 
-  const updateWithdrawalStatus = async (withdrawalId: string, status: string) => {
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    fetchWithdrawals();
+  }, [authLoading, fetchWithdrawals, user]);
+
+  const updateWithdrawalStatus = useCallback(async (withdrawalId: string, status: WithdrawalStatus) => {
     type WithdrawalUpdate = Database["public"]["Tables"]["withdrawal_requests"]["Update"];
     
     const updateData: WithdrawalUpdate = {
-      status: status as any,
+      status,
     };
 
     if (status === "completed") {
+      updateData.approved_by = user?.id;
+      updateData.approved_at = new Date().toISOString();
       updateData.completed_at = new Date().toISOString();
     } else if (status === "rejected") {
+      updateData.approved_by = user?.id;
       updateData.rejected_at = new Date().toISOString();
     }
 
@@ -90,20 +93,23 @@ export default function AdminPayouts() {
     });
 
     fetchWithdrawals();
-  };
+  }, [fetchWithdrawals, toast, user]);
 
-  if (loading) {
+  if (authLoading || (user && loading)) {
     return (
-      <AdminLayout>
-        <div className="text-center py-16">
-          <p className="text-muted-foreground">Loading withdrawals...</p>
-        </div>
-      </AdminLayout>
+      <RoleGuard allowedRoles={["admin"]}>
+        <AdminLayout>
+          <div className="text-center py-16">
+            <p className="text-muted-foreground">Loading withdrawals...</p>
+          </div>
+        </AdminLayout>
+      </RoleGuard>
     );
   }
 
   return (
-    <AdminLayout>
+    <RoleGuard allowedRoles={["admin"]}>
+      <AdminLayout>
       <div>
         <h1 className="text-3xl font-bold mb-8">Payout Management</h1>
 
@@ -127,13 +133,16 @@ export default function AdminPayouts() {
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground mb-1">
-                    Email: {withdrawal.seller?.email}
+                    Email: {withdrawal.seller?.business_email || "Not provided"}
                   </p>
                   <p className="text-xl font-bold font-mono text-green-600 mb-1">
-                    ${withdrawal.amount.toFixed(2)}
+                    {formatPrice(withdrawal.amount)}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Requested: {new Date(withdrawal.created_at).toLocaleDateString()}
+                    Requested:{" "}
+                    {withdrawal.created_at
+                      ? new Date(withdrawal.created_at).toLocaleDateString()
+                      : "Unknown"}
                   </p>
                   {withdrawal.completed_at && (
                     <p className="text-sm text-muted-foreground">
@@ -178,6 +187,7 @@ export default function AdminPayouts() {
           )}
         </div>
       </div>
-    </AdminLayout>
+      </AdminLayout>
+    </RoleGuard>
   );
 }

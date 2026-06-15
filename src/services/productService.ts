@@ -23,6 +23,8 @@ export const productService = {
         description,
         price,
         compare_at_price,
+        is_deal,
+        deal_expires_at,
         rating,
         total_reviews,
         stock_quantity,
@@ -103,6 +105,8 @@ export const productService = {
     seller_id: string;
     price: number;
     compare_at_price?: number;
+    is_deal?: boolean;
+    deal_expires_at?: string | null;
     stock_quantity: number;
     sku: string;
     images: string[];
@@ -123,6 +127,8 @@ export const productService = {
         seller_id: productData.seller_id,
         price: productData.price,
         compare_at_price: productData.compare_at_price,
+        is_deal: productData.is_deal ?? false,
+        deal_expires_at: productData.deal_expires_at ?? null,
         stock_quantity: productData.stock_quantity,
         sku: productData.sku,
         status: "pending",

@@ -11,6 +11,7 @@ interface WishlistProduct {
   title: string;
   price: number;
   compare_at_price: number | null;
+  deal_expires_at: string | null;
   rating: number;
   total_reviews: number;
   images: { url: string }[];
@@ -53,6 +54,7 @@ export default function WishlistPage() {
           title,
           price,
           compare_at_price,
+          deal_expires_at,
           rating,
           total_reviews,
           images:product_images(url),
@@ -111,6 +113,7 @@ export default function WishlistPage() {
                   rating={product.rating}
                   reviewCount={product.total_reviews}
                   sellerName={product.seller?.business_name || "Unknown"}
+                  dealExpiresAt={product.deal_expires_at}
                 />
               ))}
             </div>

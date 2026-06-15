@@ -1,29 +1,81 @@
 "use client";
 
 import { AdminLayout } from "@/components/AdminLayout";
+import { DocumentPreviewTile } from "@/components/DocumentPreviewTile";
 import { RoleGuard } from "@/components/RoleGuard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Search, CheckCircle, XCircle, Clock, Ban, Eye, Mail } from "lucide-react";
+import type { Database } from "@/integrations/supabase/database.types";
+import {
+  Ban,
+  CheckCircle,
+  Clock,
+  Eye,
+  Loader2,
+  Mail,
+  Search,
+  XCircle,
+} from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+
+type SellerProfile = Database["public"]["Tables"]["seller_profiles"]["Row"];
+type SellerStatus = Database["public"]["Enums"]["seller_status"];
+type SellerFilter = SellerStatus | "all";
+
+interface SellerWithProfile extends SellerProfile {
+  profiles: {
+    email: string | null;
+    full_name: string | null;
+  } | null;
+}
+
+function sellerDocuments(seller: SellerWithProfile) {
+  return [
+    { label: "KYC Document", href: seller.kyc_document_url },
+    { label: "CNIC Front", href: seller.cnic_front_url },
+    { label: "CNIC Back", href: seller.cnic_back_url },
+    { label: "Business Registration", href: seller.business_registration_url },
+    { label: "Tax Certificate", href: seller.tax_certificate_url },
+    { label: "Bank Proof", href: seller.bank_statement_url },
+    { label: "Brand Authorization", href: seller.brand_authorization_url },
+  ].filter((item): item is { label: string; href: string } => Boolean(item.href));
+}
+
+function sellerKycStatus(seller: SellerWithProfile) {
+  const required = [
+    { label: "Owner name", ok: Boolean(seller.owner_full_name || seller.profiles?.full_name) },
+    { label: "CNIC / Passport number", ok: Boolean(seller.owner_cnic) },
+    { label: "CNIC front", ok: Boolean(seller.cnic_front_url) },
+    { label: "CNIC back", ok: Boolean(seller.cnic_back_url) },
+    { label: "Pickup address", ok: Boolean(seller.pickup_address || seller.business_address) },
+    { label: "Return address", ok: Boolean(seller.return_address || seller.business_address) },
+    { label: "Bank name", ok: Boolean(seller.bank_name) },
+    { label: "Bank account", ok: Boolean(seller.bank_account_number) },
+  ];
+  const missing = required.filter((item) => !item.ok).map((item) => item.label);
+  const completeCount = required.length - missing.length;
+  return { completeCount, total: required.length, missing };
+}
 
 export default function AdminSellersPage() {
+  const { user, loading: authLoading } = useAuthContext();
+  const { formatPrice } = useMarketplaceSettings();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [sellers, setSellers] = useState<any[]>([]);
+  const [updatingSellerId, setUpdatingSellerId] = useState<string | null>(null);
+  const [sellers, setSellers] = useState<SellerWithProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [filter, setFilter] = useState<SellerFilter>("all");
 
-  useEffect(() => {
-    loadSellers();
-  }, []);
-
-  const loadSellers = async () => {
+  const loadSellers = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -39,9 +91,8 @@ export default function AdminSellersPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-
-      setSellers(data || []);
-    } catch (error: any) {
+      setSellers((data ?? []) as unknown as SellerWithProfile[]);
+    } catch {
       toast({
         title: "Error",
         description: "Could not load sellers",
@@ -50,140 +101,70 @@ export default function AdminSellersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  const handleApproveSeller = async (sellerId: string, sellerName: string) => {
-    try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ 
-          status: "approved", 
-          verified_at: new Date().toISOString() 
-        })
-        .eq("id", sellerId);
+  useEffect(() => {
+    if (authLoading || !user) return;
+    loadSellers();
+  }, [authLoading, loadSellers, user]);
 
-      if (error) throw error;
+  const updateSellerStatus = async (
+    seller: SellerWithProfile,
+    status: SellerStatus
+  ) => {
+    setUpdatingSellerId(seller.id);
 
-      toast({
-        title: "Seller Approved",
-        description: `${sellerName} has been approved and can now access their dashboard.`,
-      });
+    const update: Database["public"]["Tables"]["seller_profiles"]["Update"] = {
+      status,
+      verified_at: status === "approved" ? new Date().toISOString() : null,
+    };
 
-      // Reload sellers list
-      await loadSellers();
-    } catch (error: any) {
-      console.error("Approve error:", error);
-      toast({
-        title: "Action Failed",
-        description: error.message || "Could not approve seller",
-        variant: "destructive",
-      });
-    }
-  };
+    const { error } = await supabase
+      .from("seller_profiles")
+      .update(update)
+      .eq("id", seller.id);
 
-  const handleRejectSeller = async (sellerId: string, sellerName: string) => {
-    try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ 
-          status: "rejected",
-          verified_at: null
-        })
-        .eq("id", sellerId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Seller Rejected",
-        description: `${sellerName} has been rejected.`,
-        variant: "destructive",
-      });
-
-      // Reload sellers list
-      await loadSellers();
-    } catch (error: any) {
-      console.error("Reject error:", error);
+    if (error) {
       toast({
         title: "Action Failed",
-        description: error.message || "Could not reject seller",
+        description: `Could not mark ${seller.business_name} as ${status}`,
         variant: "destructive",
+      });
+    } else {
+      setSellers((current) =>
+        current.map((item) =>
+          item.id === seller.id ? { ...item, ...update } : item
+        )
+      );
+      toast({
+        title: "Seller Updated",
+        description: `${seller.business_name} is now ${status}`,
       });
     }
+
+    setUpdatingSellerId(null);
   };
 
-  const handleSuspendSeller = async (sellerId: string, sellerName: string) => {
-    try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ 
-          status: "suspended" 
-        })
-        .eq("id", sellerId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Seller Suspended",
-        description: `${sellerName} has been suspended.`,
-        variant: "destructive",
-      });
-
-      // Reload sellers list
-      await loadSellers();
-    } catch (error: any) {
-      console.error("Suspend error:", error);
-      toast({
-        title: "Action Failed",
-        description: error.message || "Could not suspend seller",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleActivateSeller = async (sellerId: string, sellerName: string) => {
-    try {
-      const { error } = await supabase
-        .from("seller_profiles")
-        .update({ 
-          status: "approved",
-          verified_at: new Date().toISOString()
-        })
-        .eq("id", sellerId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Seller Activated",
-        description: `${sellerName} has been activated.`,
-      });
-
-      // Reload sellers list
-      await loadSellers();
-    } catch (error: any) {
-      console.error("Activate error:", error);
-      toast({
-        title: "Action Failed",
-        description: error.message || "Could not activate seller",
-        variant: "destructive",
-      });
-    }
-  };
-
+  const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredSellers = sellers.filter((seller) => {
+    const status = seller.status ?? "pending";
     const matchesSearch =
-      seller.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      seller.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesFilter = filter === "all" || seller.status === filter;
+      !normalizedSearch ||
+      seller.business_name.toLowerCase().includes(normalizedSearch) ||
+      seller.business_email?.toLowerCase().includes(normalizedSearch) ||
+      seller.profiles?.email?.toLowerCase().includes(normalizedSearch);
+    const matchesFilter = filter === "all" || status === filter;
 
     return matchesSearch && matchesFilter;
   });
 
   const statusCounts = {
     all: sellers.length,
-    pending: sellers.filter((s) => s.status === "pending" || !s.status).length,
-    approved: sellers.filter((s) => s.status === "approved").length,
-    rejected: sellers.filter((s) => s.status === "rejected").length,
+    pending: sellers.filter((seller) => (seller.status ?? "pending") === "pending")
+      .length,
+    approved: sellers.filter((seller) => seller.status === "approved").length,
+    rejected: sellers.filter((seller) => seller.status === "rejected").length,
+    suspended: sellers.filter((seller) => seller.status === "suspended").length,
   };
 
   return (
@@ -192,172 +173,289 @@ export default function AdminSellersPage() {
         <div className="space-y-8">
           <div>
             <h1 className="text-3xl font-bold font-serif mb-2">Seller Management</h1>
-            <p className="text-muted-foreground">Approve, reject, or suspend seller accounts</p>
+            <p className="text-muted-foreground">
+              Approve, reject, or suspend seller accounts
+            </p>
           </div>
 
-          {/* Search and Filters */}
           <Card>
             <CardContent className="pt-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 relative">
+              <div className="flex flex-col gap-4">
+                <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search by business name or email..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(event) => setSearchQuery(event.target.value)}
                     className="pl-10"
                   />
                 </div>
 
-                <Tabs value={filter} onValueChange={(value: any) => setFilter(value)}>
-                  <TabsList>
+                <Tabs
+                  value={filter}
+                  onValueChange={(value) => setFilter(value as SellerFilter)}
+                >
+                  <TabsList className="h-auto flex-wrap justify-start">
                     <TabsTrigger value="all">All ({statusCounts.all})</TabsTrigger>
-                    <TabsTrigger value="pending">Pending ({statusCounts.pending})</TabsTrigger>
-                    <TabsTrigger value="approved">Approved ({statusCounts.approved})</TabsTrigger>
-                    <TabsTrigger value="rejected">Rejected ({statusCounts.rejected})</TabsTrigger>
+                    <TabsTrigger value="pending">
+                      Pending ({statusCounts.pending})
+                    </TabsTrigger>
+                    <TabsTrigger value="approved">
+                      Approved ({statusCounts.approved})
+                    </TabsTrigger>
+                    <TabsTrigger value="rejected">
+                      Rejected ({statusCounts.rejected})
+                    </TabsTrigger>
+                    <TabsTrigger value="suspended">
+                      Suspended ({statusCounts.suspended})
+                    </TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
             </CardContent>
           </Card>
 
-          {/* Sellers List */}
           {loading ? (
             <div className="flex items-center justify-center py-24">
               <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
             </div>
           ) : filteredSellers.length > 0 ? (
             <div className="grid gap-6">
-              {filteredSellers.map((seller) => (
-                <Card key={seller.id}>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col md:flex-row md:items-start gap-6">
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-start justify-between">
+              {filteredSellers.map((seller) => {
+                const status = seller.status ?? "pending";
+                const email = seller.business_email || seller.profiles?.email;
+                const disabled = updatingSellerId === seller.id;
+                const kycStatus = sellerKycStatus(seller);
+                const docs = sellerDocuments(seller);
+
+                return (
+                  <Card key={seller.id}>
+                    <CardContent className="p-6">
+                      <div className="flex flex-col md:flex-row md:items-start gap-6">
+                        <div className="flex-1 space-y-4">
                           <div>
-                            <h3 className="text-xl font-semibold mb-1">{seller.business_name}</h3>
-                            <p className="text-sm text-muted-foreground mb-2">
-                              {seller.profiles?.email} • {seller.profiles?.full_name}
+                            <h3 className="text-xl font-semibold mb-1">
+                              {seller.business_name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {email || "No email"} -{" "}
+                              {seller.profiles?.full_name || "No owner name"}
                             </p>
-                            <div className="flex items-center gap-2 mb-2">
-                              {seller.status === "approved" && seller.verified_at && (
-                                <Badge variant="default" className="bg-green-500/10 text-green-700">
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Approved
-                                </Badge>
-                              )}
-                              {seller.status === "rejected" && (
-                                <Badge variant="destructive">
-                                  <XCircle className="h-3 w-3 mr-1" />
-                                  Rejected
-                                </Badge>
-                              )}
-                              {seller.status === "suspended" && (
-                                <Badge variant="destructive">
-                                  <Ban className="h-3 w-3 mr-1" />
-                                  Suspended
-                                </Badge>
-                              )}
-                              {(!seller.status || seller.status === "pending") && (
-                                <Badge variant="secondary">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Pending Approval
-                                </Badge>
-                              )}
+                          </div>
+
+                          <SellerStatusBadge status={status} />
+                          <Badge
+                            variant={kycStatus.missing.length ? "secondary" : "outline"}
+                            className="w-fit"
+                          >
+                            KYC {kycStatus.completeCount}/{kycStatus.total}
+                          </Badge>
+
+                          <div className="grid md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Commission Rate</p>
+                              <p className="font-medium">
+                                {seller.commission_rate ?? 15}%
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Total Sales</p>
+                              <p className="font-medium font-mono">
+                                {formatPrice(seller.total_sales ?? 0)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Registered</p>
+                              <p className="font-medium">
+                                {seller.created_at
+                                  ? new Date(seller.created_at).toLocaleDateString()
+                                  : "Unknown"}
+                              </p>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="grid md:grid-cols-2 gap-4 text-sm">
                           <div>
-                            <p className="text-muted-foreground">Business Type</p>
-                            <p className="font-medium capitalize">{seller.business_type || "Not specified"}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Commission Rate</p>
-                            <p className="font-medium">{seller.commission_rate || 12}%</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Registered</p>
-                            <p className="font-medium">
-                              {new Date(seller.created_at).toLocaleDateString("en-US", {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                              })}
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Description
+                            </p>
+                            <p className="text-sm">
+                              {seller.business_description || "No description provided"}
                             </p>
                           </div>
+
+                          <div>
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Business Address
+                            </p>
+                            <p className="text-sm">
+                              {seller.business_address || "No address provided"}
+                            </p>
+                          </div>
+
+                          <div className="grid gap-4 rounded-md border bg-muted/30 p-4 text-sm md:grid-cols-2 xl:grid-cols-3">
+                            <div>
+                              <p className="text-muted-foreground">Owner / Authorized Person</p>
+                              <p className="font-medium">{seller.owner_full_name || "Not provided"}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">CNIC / Passport</p>
+                              <p className="font-medium">{seller.owner_cnic || "Not provided"}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Business Phone</p>
+                              <p className="font-medium">{seller.business_phone || "Not provided"}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Bank</p>
+                              <p className="font-medium">{seller.bank_name || "Not provided"}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Account Holder</p>
+                              <p className="font-medium">{seller.bank_account_name || "Not provided"}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Account Number</p>
+                              <p className="font-medium">{seller.bank_account_number || "Not provided"}</p>
+                            </div>
+                            <div className="xl:col-span-3">
+                              <p className="text-muted-foreground">Pickup Address</p>
+                              <p className="font-medium">{seller.pickup_address || "Not provided"}</p>
+                            </div>
+                            <div className="xl:col-span-3">
+                              <p className="text-muted-foreground">Return Address</p>
+                              <p className="font-medium">{seller.return_address || "Not provided"}</p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-md border p-4">
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="font-semibold">KYC Documents</p>
+                                <p className="text-sm text-muted-foreground">
+                                  CNIC, business, tax and bank proof visible to admin.
+                                </p>
+                              </div>
+                              {seller.tax_id && (
+                                <Badge variant="outline">Tax ID: {seller.tax_id}</Badge>
+                              )}
+                            </div>
+                            <div className="mb-4 rounded-md bg-muted p-3 text-sm">
+                              {kycStatus.missing.length === 0 ? (
+                                <p className="font-medium text-green-700">Required KYC is complete.</p>
+                              ) : (
+                                <>
+                                  <p className="font-medium">Missing before strong approval:</p>
+                                  <p className="mt-1 text-muted-foreground">{kycStatus.missing.join(", ")}</p>
+                                </>
+                              )}
+                            </div>
+
+                            {docs.length > 0 ? (
+                              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                {docs.map((document) => (
+                                  <DocumentPreviewTile
+                                    key={document.label}
+                                    url={document.href}
+                                    label={document.label}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                                No KYC files uploaded yet.
+                              </p>
+                            )}
+
+                            {(seller.logo_url || seller.banner_url) && (
+                              <div className="mt-4 flex flex-wrap gap-2 text-sm">
+                                {seller.logo_url && (
+                                  <a
+                                    href={seller.logo_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-medium text-primary hover:underline"
+                                  >
+                                    View logo
+                                  </a>
+                                )}
+                                {seller.banner_url && (
+                                  <a
+                                    href={seller.banner_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-medium text-primary hover:underline"
+                                  >
+                                    View banner
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
 
-                        <div>
-                          <p className="text-sm text-muted-foreground mb-1">Description</p>
-                          <p className="text-sm">{seller.business_description || seller.description || "No description provided"}</p>
-                        </div>
+                        <div className="flex flex-col gap-2 min-w-40">
+                          {status === "pending" && (
+                            <>
+                              <Button
+                                onClick={() => updateSellerStatus(seller, "approved")}
+                                disabled={disabled}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Approve
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                onClick={() => updateSellerStatus(seller, "rejected")}
+                                disabled={disabled}
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
 
-                        <div>
-                          <p className="text-sm text-muted-foreground mb-1">Business Address</p>
-                          <p className="text-sm">{seller.business_address || "No address provided"}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {(!seller.status || seller.status === "pending") && (
-                          <>
-                            <Button
-                              onClick={() => handleApproveSeller(seller.id, seller.business_name)}
-                              className="gap-2"
-                              variant="default"
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                              Approve
-                            </Button>
+                          {status === "approved" && (
                             <Button
                               variant="destructive"
-                              onClick={() => handleRejectSeller(seller.id, seller.business_name)}
-                              className="gap-2"
+                              onClick={() => updateSellerStatus(seller, "suspended")}
+                              disabled={disabled}
                             >
-                              <XCircle className="h-4 w-4" />
-                              Reject
+                              <Ban className="h-4 w-4 mr-2" />
+                              Suspend
                             </Button>
-                          </>
-                        )}
+                          )}
 
-                        {seller.status === "approved" && (
-                          <Button
-                            variant="destructive"
-                            onClick={() => handleSuspendSeller(seller.id, seller.business_name)}
-                            className="gap-2"
-                          >
-                            <Ban className="h-4 w-4" />
-                            Suspend
+                          {(status === "rejected" || status === "suspended") && (
+                            <Button
+                              onClick={() => updateSellerStatus(seller, "approved")}
+                              disabled={disabled}
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Activate
+                            </Button>
+                          )}
+
+                          <Button variant="outline" asChild>
+                            <Link href={`/sellers/${seller.id}`}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Store
+                            </Link>
                           </Button>
-                        )}
 
-                        {(seller.status === "rejected" || seller.status === "suspended") && (
-                          <Button
-                            onClick={() => handleActivateSeller(seller.id, seller.business_name)}
-                            className="gap-2"
-                            variant="default"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                            Activate
-                          </Button>
-                        )}
-
-                        <Button variant="outline" className="gap-2">
-                          <Eye className="h-4 w-4" />
-                          View Details
-                        </Button>
-
-                        <Button variant="outline" className="gap-2">
-                          <Mail className="h-4 w-4" />
-                          Contact
-                        </Button>
+                          {email && (
+                            <Button variant="outline" asChild>
+                              <a href={`mailto:${email}`}>
+                                <Mail className="h-4 w-4 mr-2" />
+                                Contact
+                              </a>
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <Card>
@@ -369,5 +467,41 @@ export default function AdminSellersPage() {
         </div>
       </AdminLayout>
     </RoleGuard>
+  );
+}
+
+function SellerStatusBadge({ status }: { status: SellerStatus }) {
+  if (status === "approved") {
+    return (
+      <Badge className="bg-green-500/10 text-green-700">
+        <CheckCircle className="h-3 w-3 mr-1" />
+        Approved
+      </Badge>
+    );
+  }
+
+  if (status === "rejected") {
+    return (
+      <Badge variant="destructive">
+        <XCircle className="h-3 w-3 mr-1" />
+        Rejected
+      </Badge>
+    );
+  }
+
+  if (status === "suspended") {
+    return (
+      <Badge variant="destructive">
+        <Ban className="h-3 w-3 mr-1" />
+        Suspended
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge variant="secondary">
+      <Clock className="h-3 w-3 mr-1" />
+      Pending Approval
+    </Badge>
   );
 }
