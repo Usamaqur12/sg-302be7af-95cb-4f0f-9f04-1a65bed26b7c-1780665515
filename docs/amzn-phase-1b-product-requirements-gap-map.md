@@ -22,6 +22,7 @@ Recommendation: treat the current codebase as a strong internal beta foundation,
 - Order creation and checkout behavior in `src/pages/api/orders/index.ts` and local fallback parity in `src/lib/server/local-db.ts`.
 - Seller-center navigation and workflow modules in `src/lib/seller-center.ts` and `src/components/SellerCenterModulePage.tsx`.
 - Existing technical audit in `docs/multivendor-implementation-plan.md`.
+- Reporting dashboard implementation in `src/pages/admin/reports.tsx`.
 
 ## Current Capability Coverage
 
@@ -109,6 +110,11 @@ Recommendation: treat the current codebase as a strong internal beta foundation,
 8. Seller KYC/request-info workflow and policy acceptance versioning.
 9. Return/refund item-level workflow with full/partial refund and seller payout reversal.
 10. Launch category governance: required attributes, prohibited item rules, and moderation queue SLAs.
+
+### Reporting surface scope clarification
+
+- `src/pages/admin/reports.tsx` is implemented and functional for aggregate platform views, but it does not yet provide event-time slicing, seller-specific SLA views, refunds/disputes/chargebacks, payout liabilities, reconciliation summaries, or alerting.
+- For launch readiness, reporting must be upgraded to source-of-truth operational dashboards with period-based and cohort-based metrics before relying on it for risk, finance, or support decisions.
 
 ### P1: Private Beta Readiness
 

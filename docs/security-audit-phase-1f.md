@@ -84,23 +84,32 @@ The audit could not exercise real cPanel MySQL data because production DB creden
 
 Checkout currently records payment method/reference/proof and creates pending payments. It does not yet use Stripe PaymentIntents or webhook-confirmed payment status. Do not launch card payments until raw card handling is avoided and payment status is driven by provider webhooks.
 
-### Blocker 3: Security Headers Need Production Enforcement
+### Blocker 3: Security Headers Baseline (Partially Implemented)
 
-`next.config.mjs` does not currently set a production security header baseline. Add and verify:
+Implementation now added in `next.config.mjs`:
 
 - `Content-Security-Policy`
-- `X-Frame-Options` or `frame-ancestors`
+- `X-Content-Type-Options`
+- `X-Frame-Options` (`DENY`) and `frame-ancestors` via CSP
 - `Referrer-Policy`
 - `Permissions-Policy`
-- `Strict-Transport-Security` on HTTPS production
+- `Cross-Origin-*` baseline controls
+- `Strict-Transport-Security` for production
 
-### Blocker 4: Remote Image Optimizer Allows Any HTTPS Host
+### Blocker 4: Remote Image Host Restriction (Implemented)
 
-`next.config.mjs` allows `images.remotePatterns` with hostname `**`. This should be narrowed before launch to approved CDN/storage domains to reduce SSRF-style image optimizer risk and untrusted media fetching.
+- `images.remotePatterns` in `next.config.mjs` now rejects wildcard `**` and allows:
+- `images.unsplash.com` (public fallback/product placeholders)
+- image host derived from `NEXT_PUBLIC_APP_URL` / `APP_URL` / `SITE_URL`
+- optional `ALLOWED_IMAGE_HOSTS` / `NEXT_PUBLIC_ALLOWED_IMAGE_HOSTS`
+- local dev hosts
 
-### Blocker 5: CSRF Protection Is Partial
+### Blocker 5: CSRF Protection (Partially Implemented)
 
-The app uses `SameSite=Lax` cookies, which helps, but high-impact POST APIs do not use CSRF tokens or origin validation. Add origin checks or CSRF tokens for authenticated mutation APIs before production exposure.
+- Added `src/middleware.ts` with middleware-enforced origin validation for non-safe methods under `/api/*`.
+- In production, state-changing requests without `Origin` are now rejected.
+- Production browser/API cross-site POST/PUT/PATCH/DELETE calls from unapproved origins are rejected with 403.
+- CSRF token issuance/rotation is still not implemented (token-based CSRF remains a launch-hardening follow-up).
 
 ## Verification
 
@@ -117,3 +126,18 @@ Command required the local bundled Node runtime because `node`/`npm` are not on 
 ```text
 C:\Users\OSAMA\Documents\Codex\2026-06-05\chrome-plugin-chrome-openai-bundled-mai\tools\node-v22.11.0-win-x64
 ```
+
+## Wake Recovery Update (2026-06-15)
+
+Implemented directly from this heartbeat:
+
+- Added request-level hardening in `next.config.mjs`:
+  - security headers are now added as global response headers, with HSTS in production.
+  - `Content-Security-Policy`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and baseline cross-origin controls are now active.
+  - `images.remotePatterns` is now allowlist-based (`images.unsplash.com` + configured hosts + app host), no longer `**`.
+- Added `src/middleware.ts` to reject non-safe API mutations (`POST`/`PUT`/`PATCH`/`DELETE`) from disallowed origins.
+
+Current blockers:
+
+- Payment launch still blocked until provider-backed authorization/capture/refund and webhook reconciliation are implemented.
+- Live policy verification remains blocked until staging/production-like MySQL credentials are available for cross-role read/write smoke tests.
