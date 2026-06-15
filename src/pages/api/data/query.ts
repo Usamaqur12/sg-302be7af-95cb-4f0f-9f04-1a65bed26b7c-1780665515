@@ -70,6 +70,149 @@ const PUBLIC_READ_TABLES = new Set([
   "system_settings",
 ]);
 
+const STAFF_READ_ROLES = new Set(["admin", "manager", "warehouse"]);
+
+const SENSITIVE_SELLER_PROFILE_FIELDS = [
+  "business_address",
+  "business_phone",
+  "business_email",
+  "kyc_document_url",
+  "kyc_document_type",
+  "tax_id",
+  "owner_full_name",
+  "owner_cnic",
+  "cnic_front_url",
+  "cnic_back_url",
+  "business_registration_url",
+  "tax_certificate_url",
+  "bank_statement_url",
+  "brand_authorization_url",
+  "pickup_address",
+  "return_address",
+  "bank_account_name",
+  "bank_account_number",
+  "bank_name",
+  "total_sales",
+  "total_earnings",
+  "available_balance",
+  "order_volume_limit",
+  "non_compliance_points",
+  "admin_note",
+  "seller_center_enabled_options",
+];
+
+const PUBLIC_COLUMNS_BY_TABLE: Record<string, Set<string>> = {
+  categories: new Set([
+    "id",
+    "name",
+    "slug",
+    "description",
+    "image_url",
+    "icon",
+    "parent_id",
+    "display_order",
+    "is_active",
+    "created_at",
+    "updated_at",
+  ]),
+  products: new Set([
+    "id",
+    "seller_id",
+    "category_id",
+    "title",
+    "slug",
+    "description",
+    "price",
+    "compare_at_price",
+    "sku",
+    "stock_quantity",
+    "low_stock_threshold",
+    "weight",
+    "dimensions",
+    "status",
+    "featured",
+    "sales_count",
+    "view_count",
+    "rating",
+    "total_reviews",
+    "created_at",
+    "updated_at",
+  ]),
+  product_images: new Set(["id", "product_id", "url", "alt_text", "display_order", "created_at"]),
+  seller_profiles: new Set([
+    "id",
+    "business_name",
+    "business_description",
+    "logo_url",
+    "banner_url",
+    "status",
+    "rating",
+    "total_reviews",
+    "holiday_mode",
+    "holiday_message",
+    "created_at",
+    "updated_at",
+  ]),
+  reviews: new Set([
+    "id",
+    "product_id",
+    "user_id",
+    "rating",
+    "title",
+    "comment",
+    "is_verified",
+    "created_at",
+    "updated_at",
+  ]),
+  banners: new Set([
+    "id",
+    "title",
+    "subtitle",
+    "image_url",
+    "link_url",
+    "position",
+    "is_active",
+    "display_order",
+    "created_at",
+    "updated_at",
+  ]),
+  system_settings: new Set(["id", "key", "value", "description", "updated_at"]),
+};
+
+const PUBLIC_SETTINGS_KEYS = new Set([
+  "marketplace_name",
+  "marketplace_logo",
+  "marketplace_favicon",
+  "marketplace_description",
+  "theme_config",
+  "homepage_sections",
+  "public_pages_json",
+  "seller_payout_hold_days",
+]);
+
+const STAFF_SELECT_TABLES = new Set([
+  "seller_profiles",
+  "categories",
+  "products",
+  "product_images",
+  "product_variants",
+  "orders",
+  "order_items",
+  "payments",
+  "seller_earnings",
+  "withdrawal_requests",
+  "return_requests",
+  "support_tickets",
+  "ticket_messages",
+  "coupons",
+  "promotion_requests",
+  "marketing_campaigns",
+  "marketing_ad_events",
+  "banners",
+  "customer_addresses",
+  "system_settings",
+]);
+
 const PAYOUT_RELEASE_READ_TABLES = new Set([
   "seller_profiles",
   "seller_earnings",
@@ -118,6 +261,12 @@ function payloadRows(payload: DataQuery["payload"]) {
 function idFilters(query: DataQuery) {
   return (query.filters || [])
     .filter((filter) => filter.column === "id" && filter.op === "eq")
+    .map((filter) => String(filter.value));
+}
+
+function eqFilters(query: DataQuery, column: string) {
+  return (query.filters || [])
+    .filter((filter) => filter.column === column && filter.op === "eq")
     .map((filter) => String(filter.value));
 }
 
@@ -349,6 +498,24 @@ async function customerOwnsOrders(
   return rows.length === uniqueIds.length;
 }
 
+async function customerOwnsCarts(customerId: string, cartIds: string[], useLocalDevDb: boolean) {
+  const uniqueIds = [...new Set(cartIds.filter(Boolean))];
+  if (!uniqueIds.length) return false;
+
+  if (useLocalDevDb) {
+    const db = await readLocalDatabase();
+    return uniqueIds.every((id) =>
+      db.carts.some((cart) => String(cart.id) === id && String(cart.user_id) === customerId)
+    );
+  }
+
+  const rows = await queryRows<Array<RowDataPacket & { id: string }>>(
+    `SELECT id FROM carts WHERE user_id = ? AND id IN (${uniqueIds.map(() => "?").join(", ")})`,
+    [customerId, ...uniqueIds]
+  );
+  return rows.length === uniqueIds.length;
+}
+
 async function sellerOwnsProductImages(
   sellerId: string,
   imageIds: string[],
@@ -427,6 +594,93 @@ function scopedToUser(query: DataQuery, userId: string, column = "user_id") {
   return (query.filters || []).some(
     (filter) => filter.column === column && filter.op === "eq" && String(filter.value) === userId
   );
+}
+
+function isStaff(session: SessionUser | null) {
+  return Boolean(session && STAFF_READ_ROLES.has(session.role));
+}
+
+function hasScopedFilter(query: DataQuery, column: string, value: string) {
+  return (query.filters || []).some((filter) => {
+    if (filter.column !== column) return false;
+    if (filter.op === "eq") return String(filter.value) === value;
+    if (filter.op === "in" && Array.isArray(filter.value)) {
+      return filter.value.length > 0 && filter.value.every((item) => String(item) === value);
+    }
+    return false;
+  });
+}
+
+function filterValues(query: DataQuery, column: string) {
+  const values: string[] = [];
+  for (const filter of query.filters || []) {
+    if (filter.column !== column) continue;
+    if (filter.op === "eq") values.push(String(filter.value));
+    if (filter.op === "in" && Array.isArray(filter.value)) {
+      values.push(...filter.value.map((item) => String(item)));
+    }
+  }
+  return values.filter(Boolean);
+}
+
+function redactRecord(table: string, row: RowDataPacket | Record<string, unknown>) {
+  const allowed = PUBLIC_COLUMNS_BY_TABLE[table];
+  if (!allowed) return row;
+
+  if (table === "system_settings" && !PUBLIC_SETTINGS_KEYS.has(String(row.key || ""))) {
+    return null;
+  }
+
+  const next: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(row, key)) next[key] = row[key];
+  }
+
+  if (table === "products") {
+    if (Array.isArray(row.images)) {
+      next.images = row.images
+        .map((image) => redactRecord("product_images", image))
+        .filter(Boolean);
+    }
+    if (row.category && typeof row.category === "object") {
+      next.category = redactRecord("categories", row.category as RowDataPacket);
+    }
+    if (row.seller && typeof row.seller === "object") {
+      next.seller = redactRecord("seller_profiles", row.seller as RowDataPacket);
+    }
+  }
+
+  return next;
+}
+
+function redactPublicResult(query: DataQuery, result: { data: unknown; count: number | null }) {
+  if (query.head) return result;
+
+  const redact = (row: unknown) => {
+    if (!row || typeof row !== "object") return row;
+    return redactRecord(query.table, row as RowDataPacket);
+  };
+
+  const data = Array.isArray(result.data)
+    ? result.data.map(redact).filter(Boolean)
+    : redact(result.data);
+
+  return {
+    ...result,
+    data,
+    count: query.count === "exact" && Array.isArray(data) ? data.length : result.count,
+  };
+}
+
+function shouldRedactSelect(query: DataQuery, session: SessionUser | null) {
+  if (query.operation !== "select" || !PUBLIC_READ_TABLES.has(query.table)) return false;
+  if (session?.role === "admin" || session?.role === "manager" || session?.role === "warehouse") {
+    return false;
+  }
+  if (session?.role === "seller" && query.table === "seller_profiles" && scopedToUser(query, session.id)) {
+    return false;
+  }
+  return true;
 }
 
 function buildWhere(query: DataQuery) {
@@ -1162,25 +1416,107 @@ function shouldReleaseSellerEarnings(query: DataQuery) {
   );
 }
 
+async function ensureSellerSelectAccess(
+  query: DataQuery,
+  session: SessionUser,
+  useLocalDevDb: boolean
+) {
+  const seller = await getSellerAccess(session.id, useLocalDevDb);
+
+  if (query.table === "seller_profiles") {
+    if (scopedToUser(query, session.id) || (seller && hasScopedFilter(query, "id", seller.id))) return;
+    throw new Error("Access denied: seller profile scope is required");
+  }
+
+  if (!seller) throw new Error("Access denied: seller profile not found");
+
+  if (
+    [
+      "products",
+      "product_variants",
+      "order_items",
+      "seller_earnings",
+      "withdrawal_requests",
+      "marketing_campaigns",
+      "promotion_requests",
+    ].includes(query.table)
+  ) {
+    if (hasScopedFilter(query, "seller_id", seller.id)) return;
+    throw new Error(`Access denied: seller ${query.table} scope is required`);
+  }
+
+  if (query.table === "product_images") {
+    const productIds = filterValues(query, "product_id");
+    if (productIds.length && (await sellerOwnsProducts(seller.id, productIds, useLocalDevDb))) return;
+    throw new Error("Access denied: seller product image scope is required");
+  }
+
+  if (query.table === "orders") {
+    const orderIds = idFilters(query);
+    if (orderIds.length && (await sellerOwnsOrders(seller.id, orderIds, useLocalDevDb))) return;
+    throw new Error("Access denied: seller order scope is required");
+  }
+
+  if (query.table === "support_tickets" && scopedToUser(query, session.id)) return;
+
+  throw new Error("Access denied: this seller read is not allowed");
+}
+
+async function ensureCustomerSelectAccess(
+  query: DataQuery,
+  session: SessionUser,
+  useLocalDevDb: boolean
+) {
+  if (query.table === "profiles" && hasScopedFilter(query, "id", session.id)) return;
+  if (query.table === "orders" && scopedToUser(query, session.id, "customer_id")) return;
+  if (["wishlists", "customer_addresses", "carts", "support_tickets"].includes(query.table)) {
+    if (scopedToUser(query, session.id)) return;
+    throw new Error(`Access denied: ${query.table} scope is required`);
+  }
+  if (query.table === "cart_items") {
+    throw new Error("Access denied: use the cart API for cart items");
+  }
+  if (["order_items", "payments", "return_requests"].includes(query.table)) {
+    if (query.table === "return_requests" && scopedToUser(query, session.id, "customer_id")) return;
+    const orderIds = filterValues(query, "order_id");
+    if (orderIds.length && (await customerOwnsOrders(session.id, orderIds, useLocalDevDb))) return;
+    throw new Error(`Access denied: ${query.table} order scope is required`);
+  }
+  if (query.table === "reviews" && scopedToUser(query, session.id)) return;
+
+  throw new Error("Access denied: this customer read is not allowed");
+}
+
 async function ensureAccess(query: DataQuery, session: SessionUser | null, useLocalDevDb: boolean) {
-  if (query.operation === "select" && PUBLIC_READ_TABLES.has(query.table)) return;
+  if (
+    query.operation === "select" &&
+    PUBLIC_READ_TABLES.has(query.table) &&
+    !(query.table === "seller_profiles" && session?.role === "seller" && scopedToUser(query, session.id))
+  ) {
+    return;
+  }
+
   if (!session) throw new Error("Authentication required");
   if (session.role === "admin") return;
-  if (session.role === "seller" && query.operation === "select" && query.table === "marketing_campaigns") {
-    const seller = await getSellerAccess(session.id, useLocalDevDb);
-    if (!seller || !scopedToUser(query, seller.id, "seller_id")) {
-      throw new Error("Access denied: seller campaign scope is required");
+
+  if (query.operation === "select") {
+    if (session.role === "manager" || session.role === "warehouse") {
+      if (STAFF_SELECT_TABLES.has(query.table)) return;
+      throw new Error("Access denied: staff cannot read this area");
     }
-    return;
-  }
-  if (session.role === "seller" && query.operation === "select" && query.table === "promotion_requests") {
-    const seller = await getSellerAccess(session.id, useLocalDevDb);
-    if (!seller || !scopedToUser(query, seller.id, "seller_id")) {
-      throw new Error("Access denied: seller promotion request scope is required");
+    if (session.role === "seller") {
+      if (PUBLIC_READ_TABLES.has(query.table) && query.table !== "seller_profiles") return;
+      await ensureSellerSelectAccess(query, session, useLocalDevDb);
+      return;
     }
-    return;
+    if (session.role === "customer") {
+      if (PUBLIC_READ_TABLES.has(query.table)) return;
+      await ensureCustomerSelectAccess(query, session, useLocalDevDb);
+      return;
+    }
+    throw new Error("Authentication required");
   }
-  if (query.operation === "select") return;
+
   if (session.role === "manager" || session.role === "warehouse") {
     ensureStaffMutationAccess(query, session);
     return;
@@ -1215,9 +1551,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await releaseDueSellerEarnings(useLocalDevDb);
     }
     if (useLocalDevDb) {
-      const result = query.operation === "select"
+      const rawResult = query.operation === "select"
         ? await localSelect(query)
         : await localMutate(query);
+      const result =
+        query.operation === "select" && shouldRedactSelect(query, session)
+          ? redactPublicResult(query, rawResult)
+          : rawResult;
       if (query.table === "orders" && query.operation !== "select") {
         await releaseDueSellerEarnings(useLocalDevDb);
       }
@@ -1230,9 +1570,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ ...result, error: null });
     }
 
-    const result = query.operation === "select"
+    const rawResult = query.operation === "select"
       ? await selectRows(query)
       : await mutateRows(query);
+    const result =
+      query.operation === "select" && shouldRedactSelect(query, session)
+        ? redactPublicResult(query, rawResult)
+        : rawResult;
     if (query.table === "orders" && query.operation !== "select") {
       await releaseDueSellerEarnings(useLocalDevDb);
     }

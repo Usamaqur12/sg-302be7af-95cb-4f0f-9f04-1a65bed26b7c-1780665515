@@ -320,7 +320,7 @@ export default function CheckoutPage() {
 
         {/* Progress Steps */}
         <div className="mb-8">
-          <div className="flex items-center justify-center gap-4 mb-6">
+          <div className="mb-6 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2">
               <div
                 className={`h-10 w-10 rounded-full flex items-center justify-center font-semibold ${
@@ -334,7 +334,7 @@ export default function CheckoutPage() {
               <span className="font-medium">Shipping</span>
             </div>
 
-            <div className="h-0.5 w-16 bg-muted"></div>
+            <div className="hidden h-0.5 w-16 bg-muted sm:block"></div>
 
             <div className="flex items-center gap-2">
               <div
@@ -353,7 +353,7 @@ export default function CheckoutPage() {
               </span>
             </div>
 
-            <div className="h-0.5 w-16 bg-muted"></div>
+            <div className="hidden h-0.5 w-16 bg-muted sm:block"></div>
 
             <div className="flex items-center gap-2">
               <div
@@ -572,7 +572,7 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  <div className="flex gap-4 pt-4">
+                  <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-4">
                     <Button
                       variant="outline"
                       onClick={() => setCurrentStep("shipping")}
@@ -583,7 +583,7 @@ export default function CheckoutPage() {
                     <Button
                       onClick={handlePlaceOrder}
                       disabled={processing || uploadingPaymentProof}
-                      className="flex-1"
+                      className="min-w-0 flex-1 whitespace-normal"
                       size="lg"
                     >
                       {processing ? "Processing..." : `Place Order - ${formatPrice(total)}`}

@@ -142,7 +142,7 @@ export default function SearchPage() {
       <div className="container py-8">
         {/* Search Bar */}
         <form onSubmit={handleSearch} className="mb-8">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
@@ -153,7 +153,7 @@ export default function SearchPage() {
                 className="pl-10 h-12 text-lg"
               />
             </div>
-            <Button type="submit" size="lg" className="px-8">
+            <Button type="submit" size="lg" className="w-full px-8 sm:w-auto">
               Search
             </Button>
             <Button
@@ -161,7 +161,7 @@ export default function SearchPage() {
               variant="outline"
               size="lg"
               onClick={() => setShowFilters(!showFilters)}
-              className="relative"
+              className="relative w-full sm:w-auto"
             >
               <SlidersHorizontal className="h-5 w-5" />
               {activeFiltersCount > 0 && (
@@ -275,10 +275,10 @@ export default function SearchPage() {
           {/* Results */}
           <div className="flex-1">
             {/* Results Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 {searchQuery && (
-                  <h1 className="text-2xl font-bold mb-1">
+                  <h1 className="mb-1 break-words text-2xl font-bold">
                     Search results for "{searchQuery}"
                   </h1>
                 )}
@@ -294,7 +294,7 @@ export default function SearchPage() {
                   setTimeout(() => performSearch(), 0);
                 }}
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
