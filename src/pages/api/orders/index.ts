@@ -65,6 +65,20 @@ export default async function handler(
   }
 
   const orderInput = validation.data as LocalOrderInput;
+
+  const manualPaymentMethod = orderInput.payment_method !== "cash_on_delivery";
+  const hasManualEvidence =
+    (typeof orderInput.payment_reference === "string" && orderInput.payment_reference.trim().length > 0) ||
+    (typeof orderInput.payment_proof_url === "string" && orderInput.payment_proof_url.trim().length > 0);
+
+  if (!["cash_on_delivery", "bank_transfer", "jazzcash", "easypaisa"].includes(orderInput.payment_method)) {
+    return res.status(400).json({ error: "Unsupported payment method. Manual payments only." });
+  }
+
+  if (manualPaymentMethod && !hasManualEvidence) {
+    return res.status(400).json({ error: "Payment method requires a transaction reference or proof." });
+  }
+
   const productIds = [...new Set(orderInput.items.map((item) => item.product_id))];
 
   try {
