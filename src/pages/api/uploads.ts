@@ -33,6 +33,8 @@ const imageScopes = new Set<UploadScope>([
   "payment-proof",
 ]);
 
+const privateScopes = new Set<UploadScope>(["kyc", "payment-proof"]);
+
 const extensionsByMime: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -102,7 +104,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(413).json({ error: "File is too large" });
     }
 
-    const uploadRoot = path.join(process.cwd(), "public", "uploads");
+    const uploadRoot = privateScopes.has(scope)
+      ? path.join(process.cwd(), ".private", "uploads")
+      : path.join(process.cwd(), "public", "uploads");
     const userFolder = cleanName(session.id);
     const folder = path.join(uploadRoot, scope, userFolder);
     await mkdir(folder, { recursive: true });
@@ -114,7 +118,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await writeFile(filePath, buffer);
 
     return res.status(201).json({
-      url: `/uploads/${scope}/${userFolder}/${fileName}`,
+      url: privateScopes.has(scope)
+        ? `/api/uploads/${scope}/${userFolder}/${fileName}`
+        : `/uploads/${scope}/${userFolder}/${fileName}`,
       mimeType,
       size: buffer.byteLength,
     });

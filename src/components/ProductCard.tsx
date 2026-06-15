@@ -260,8 +260,8 @@ export function ProductCard({
 
           {/* Price */}
           <div className="mt-auto">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-lg font-bold text-primary">{formatPrice(price)}</span>
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="break-words text-lg font-bold text-primary">{formatPrice(price)}</span>
               {compareAtPrice && (
                 <span className="text-xs text-muted-foreground line-through">
                   {formatPrice(compareAtPrice)}
@@ -271,14 +271,14 @@ export function ProductCard({
             {showCountdown && (
               <div className="mb-3 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-2 py-1.5 text-xs font-semibold text-destructive">
                 <Timer className="h-3.5 w-3.5" />
-                Sale ends {countdownLabel}
+                <span className="min-w-0 break-words">Sale ends {countdownLabel}</span>
               </div>
             )}
 
             {/* Add to Cart Button */}
             <Button
               size="sm"
-              className="w-full opacity-0 group-hover:opacity-100 transition-opacity"
+              className="w-full transition-opacity md:opacity-0 md:group-hover:opacity-100"
               onClick={handleAddToCart}
             >
               <ShoppingCart className="mr-2 h-4 w-4" />

@@ -81,9 +81,9 @@ export default function CartPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
             {items.map((item) => (
-              <Card key={item.id} className="p-6">
-                <div className="flex gap-6">
-                  <div className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-muted">
+              <Card key={item.id} className="p-4 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+                  <div className="relative h-36 w-full flex-shrink-0 overflow-hidden rounded-lg bg-muted sm:h-24 sm:w-24">
                     <Image
                       src={item.product.images[0]?.url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=200&fit=crop"}
                       alt={item.product.title}
@@ -92,7 +92,7 @@ export default function CartPage() {
                     />
                   </div>
 
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <Link href={`/products/${item.product_id}`}>
                       <h3 className="font-semibold mb-1 hover:text-accent transition-colors">
                         {item.product.title}
@@ -102,7 +102,7 @@ export default function CartPage() {
                       Sold by {item.product.seller?.business_name}
                     </p>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center border border-border rounded-md">
                         <Button
                           variant="ghost"
@@ -123,8 +123,8 @@ export default function CartPage() {
                         </Button>
                       </div>
 
-                      <div className="flex items-center gap-4">
-                        <span className="text-xl font-bold font-mono">
+                      <div className="flex items-center justify-between gap-4 sm:justify-end">
+                        <span className="break-words font-mono text-xl font-bold">
                           {formatPrice(item.product.price * item.quantity)}
                         </span>
                         <Button

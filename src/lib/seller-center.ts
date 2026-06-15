@@ -137,33 +137,33 @@ export const sellerCenterModules = [
   {
     title: "Account Health",
     href: "/seller/account-health",
-    description: "View non-compliance points, order volume limit and store risk signals.",
-    features: ["NCP status", "Order volume limit", "Account notices"],
+    description: "Run seller operations reviews for non-compliance points, order volume limits and policy risk signals.",
+    features: ["Policy signals", "Order volume limit", "Corrective actions"],
     options: [
       {
         title: "Account Health Overview",
         href: "/seller/account-health",
-        description: "Review your health score, risk level and policy signals.",
+        description: "Review your health score, active risk level, required evidence and corrective actions.",
       },
       {
         title: "Non-compliance Points",
         href: "/seller/account-health?view=ncp",
-        description: "Track policy points and actions needed to keep the store healthy.",
+        description: "Track policy points, root causes, evidence and actions needed to keep the store healthy.",
       },
       {
         title: "Order Volume Limit",
         href: "/seller/account-health?view=ovl",
-        description: "See your daily fulfillment capacity and account limit.",
+        description: "See your daily fulfillment capacity, cutoff risk and account limit recovery path.",
       },
       {
         title: "Policy Center",
         href: "/seller/guidelines",
-        description: "Review marketplace rules, listing policy and seller standards.",
+        description: "Review marketplace rules, listing policy, fulfillment standards and escalation guidance.",
       },
       {
         title: "Performance Tips",
         href: "/seller/account-health?view=performance",
-        description: "Use practical actions to improve fulfillment and quality metrics.",
+        description: "Use practical actions to improve fulfillment, buyer experience and quality metrics.",
       },
     ],
   },
@@ -358,8 +358,8 @@ export const sellerCenterModules = [
   {
     title: "Setting and Support",
     href: "/seller/support",
-    description: "Access support tickets, help center, guidelines and seller support.",
-    features: ["Support tickets", "Guidelines", "Help center"],
+    description: "Access support tickets, claims, policy guidance and seller operations help.",
+    features: ["Support tickets", "Claims", "Policy help"],
     options: [
       {
         title: "Help Center",
