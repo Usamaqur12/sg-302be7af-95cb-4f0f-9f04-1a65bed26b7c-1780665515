@@ -1,3 +1,5 @@
+import { csrfHeaders } from "@/lib/csrf";
+
 type FilterOp = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "ilike" | "in" | "is" | "not_is";
 
 interface Filter {
@@ -188,7 +190,7 @@ class MysqlQueryBuilder {
   async execute() {
     const response = await fetch(dataApiUrl(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: csrfHeaders({ "Content-Type": "application/json" }),
       credentials: "include",
       body: JSON.stringify(this.body),
     });
@@ -236,13 +238,17 @@ export const supabase = {
       return { data: { user: payload.user || null }, error: null };
     },
     async signOut() {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: csrfHeaders(),
+        credentials: "include",
+      });
       return { error: null };
     },
     async signUp({ email, password, options }: { email: string; password: string; options?: { data?: { full_name?: string; phone?: string } } }) {
       const response = await fetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: csrfHeaders({ "Content-Type": "application/json" }),
         credentials: "include",
         body: JSON.stringify({
           email,
@@ -260,7 +266,7 @@ export const supabase = {
     async signInWithPassword({ email, password }: { email: string; password: string }) {
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: csrfHeaders({ "Content-Type": "application/json" }),
         credentials: "include",
         body: JSON.stringify({ email, password }),
       });

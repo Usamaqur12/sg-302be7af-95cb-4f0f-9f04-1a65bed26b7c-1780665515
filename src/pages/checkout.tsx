@@ -17,6 +17,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Banknote, Building2, CheckCircle2, Package, Smartphone, TruckIcon, Upload } from "lucide-react";
 import { analytics } from "@/lib/analytics";
+import { csrfHeaders } from "@/lib/csrf";
 import { getErrorMessage } from "@/lib/errors";
 import { calculatePromotionSummary, type PromotionSummary } from "@/lib/promotions";
 import { uploadFile } from "@/lib/uploads";
@@ -199,9 +200,9 @@ export default function CheckoutPage() {
 
       const response = await fetch("/api/orders", {
         method: "POST",
-        headers: {
+        headers: csrfHeaders({
           "Content-Type": "application/json",
-        },
+        }),
         credentials: "include",
         body: JSON.stringify({
           items: items.map((item) => ({

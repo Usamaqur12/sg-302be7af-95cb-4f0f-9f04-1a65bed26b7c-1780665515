@@ -1,3 +1,5 @@
+import { csrfHeaders } from "@/lib/csrf";
+
 export type UploadScope =
   | "product"
   | "seller-logo"
@@ -20,7 +22,7 @@ export async function uploadFile(file: File, scope: UploadScope) {
   const dataUrl = await readFileAsDataUrl(file);
   const response = await fetch("/api/uploads", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: csrfHeaders({ "Content-Type": "application/json" }),
     credentials: "include",
     body: JSON.stringify({
       fileName: file.name,
