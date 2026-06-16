@@ -34,6 +34,15 @@ function hasHealthAccess(req: NextApiRequest) {
   return header === `Bearer ${token}` || req.query.token === token;
 }
 
+function healthHttpStatus(status: CheckStatus, database: HealthResponse["database"]) {
+  if (status === "ok") return 200;
+
+  const localFallbackIsExpected =
+    database.mode === "local_fallback" && process.env.NODE_ENV !== "production";
+
+  return localFallbackIsExpected ? 200 : 503;
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<HealthResponse | { error: string }>
@@ -91,7 +100,8 @@ export default async function handler(
   }
 
   const body: HealthResponse = { status, checkedAt, app, database };
+  const httpStatus = healthHttpStatus(status, database);
   res.setHeader("Cache-Control", "no-store");
-  if (req.method === "HEAD") return res.status(status === "ok" ? 200 : 503).end();
-  return res.status(status === "ok" ? 200 : 503).json(body);
+  if (req.method === "HEAD") return res.status(httpStatus).end();
+  return res.status(httpStatus).json(body);
 }
