@@ -23,6 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
   }
+  res.setHeader("Cache-Control", "no-store");
 
   const session = await readSession(req);
   if (!session) return res.status(200).json({ user: null, profile: null });
