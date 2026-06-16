@@ -158,3 +158,14 @@ Current blockers:
 
 - Payment launch still blocked until provider-backed authorization/capture/refund and webhook reconciliation are implemented.
 - Live policy verification remains blocked until staging/production-like MySQL credentials are available for cross-role read/write smoke tests.
+
+Resume Update (2026-06-16, Recovery Continuation):
+
+- Added server-side payment-collection hardening in `src/pages/api/orders/index.ts`:
+  - Explicitly rejects unsupported payment methods (`card`, `paypal`, etc.) so only `cash_on_delivery`, `bank_transfer`, `jazzcash`, and `easypaisa` can be submitted.
+  - Requires manual payment submissions to include at least one of `payment_reference` or `payment_proof_url`, preventing direct API bypass of checkout client-side checks.
+
+Current blockers remain unchanged:
+
+- PCI launch blocker is still active until provider-backed authorization/capture/refund + webhook reconciliation is implemented.
+- Live policy verification is still blocked by missing staging/production-like MySQL credentials for cross-role read/write smoke tests.
