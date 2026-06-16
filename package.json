@@ -8,6 +8,7 @@
     "start": "node server.cjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
+    "test:finance-workflows": "node scripts/finance-workflow-tests.cjs",
     "db:install": "node scripts/install-mysql.mjs",
     "setup:admin": "node scripts/setup-admin.mjs",
     "uploads:restore-smoke": "node scripts/upload-restore-smoke.mjs"
