@@ -17,7 +17,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
-  if (enforceRateLimit(req, res, { key: "auth-register", limit: 5, windowMs: 10 * 60_000 })) {
+  if (await enforceRateLimit(req, res, { key: "auth-register", limit: 5, windowMs: 10 * 60_000 })) {
+    return;
+  }
+  const accountScope =
+    typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : null;
+  if (
+    accountScope &&
+    await enforceRateLimit(req, res, {
+      key: "auth-register-account",
+      limit: 3,
+      windowMs: 60 * 60_000,
+      scope: accountScope,
+    })
+  ) {
     return;
   }
 

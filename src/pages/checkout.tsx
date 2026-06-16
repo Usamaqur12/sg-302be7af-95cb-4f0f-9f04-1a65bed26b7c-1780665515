@@ -15,7 +15,9 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Banknote, Building2, CheckCircle2, Package, Smartphone, TruckIcon, Upload } from "lucide-react";
+import { ArrowLeft, Banknote, Building2, CheckCircle2, CreditCard, Package, Smartphone, TruckIcon, Upload } from "lucide-react";
+import { CardElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import { analytics } from "@/lib/analytics";
 import { csrfHeaders } from "@/lib/csrf";
 import { getErrorMessage } from "@/lib/errors";
@@ -23,7 +25,11 @@ import { calculatePromotionSummary, type PromotionSummary } from "@/lib/promotio
 import { uploadFile } from "@/lib/uploads";
 
 type CheckoutStep = "shipping" | "payment" | "confirmation";
-type PaymentMethod = "cash_on_delivery" | "bank_transfer" | "jazzcash" | "easypaisa";
+type PaymentMethod = "card" | "cash_on_delivery" | "bank_transfer" | "jazzcash" | "easypaisa";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 const paymentOptions: Array<{
   method: PaymentMethod;
@@ -31,6 +37,12 @@ const paymentOptions: Array<{
   description: string;
   icon: typeof Banknote;
 }> = [
+  {
+    method: "card",
+    title: "Credit or Debit Card",
+    description: "Pay securely by card through Stripe.",
+    icon: CreditCard,
+  },
   {
     method: "cash_on_delivery",
     title: "Cash on Delivery",
@@ -58,16 +70,31 @@ const paymentOptions: Array<{
 ];
 
 export default function CheckoutPage() {
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutContent />
+    </Elements>
+  );
+}
+
+function CheckoutContent() {
   const { user } = useAuth();
   const { items, total: cartTotal, itemCount, clearCart } = useCart();
   const { deliveryCity, formatPrice } = useMarketplaceSettings();
   const { toast } = useToast();
   const router = useRouter();
+  const stripe = useStripe();
+  const elements = useElements();
 
   const [currentStep, setCurrentStep] = useState<CheckoutStep>("shipping");
   const [processing, setProcessing] = useState(false);
   const [uploadingPaymentProof, setUploadingPaymentProof] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [checkoutAttemptId, setCheckoutAttemptId] = useState("");
+
+  useEffect(() => {
+    setCheckoutAttemptId(globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+  }, []);
 
   // Shipping form
   const [shippingData, setShippingData] = useState({
@@ -187,11 +214,20 @@ export default function CheckoutPage() {
     setProcessing(true);
 
     try {
-      const manualPayment = paymentData.method !== "cash_on_delivery";
+      const manualPayment = paymentData.method !== "card" && paymentData.method !== "cash_on_delivery";
       if (manualPayment && !paymentData.reference.trim()) {
         toast({
           title: "Payment reference required",
           description: "Enter your bank/mobile wallet transaction ID before placing the order.",
+          variant: "destructive",
+        });
+        setProcessing(false);
+        return;
+      }
+      if (paymentData.method === "card" && (!stripe || !elements)) {
+        toast({
+          title: "Card payments unavailable",
+          description: "Stripe is still loading or is not configured. Try again in a moment.",
           variant: "destructive",
         });
         setProcessing(false);
@@ -202,6 +238,7 @@ export default function CheckoutPage() {
         method: "POST",
         headers: csrfHeaders({
           "Content-Type": "application/json",
+          "Idempotency-Key": checkoutAttemptId,
         }),
         credentials: "include",
         body: JSON.stringify({
@@ -220,15 +257,50 @@ export default function CheckoutPage() {
           payment_method: paymentData.method,
           payment_reference: paymentData.reference.trim() || undefined,
           payment_proof_url: paymentData.proofUrl || undefined,
+          idempotency_key: checkoutAttemptId,
         }),
       });
       const payload = await response.json() as {
         order?: { id: string; orderNumber: string; total: number };
+        payment?: { provider: "stripe"; clientSecret: string | null; paymentIntentId: string };
         error?: string;
       };
 
       if (!response.ok || !payload.order) {
         throw new Error(payload.error || "Could not place order");
+      }
+
+      if (paymentData.method === "card") {
+        const cardElement = elements?.getElement(CardElement);
+        if (!payload.payment?.clientSecret || !stripe || !cardElement) {
+          throw new Error("Card payment could not be initialized.");
+        }
+
+        const confirmation = await stripe.confirmCardPayment(payload.payment.clientSecret, {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              name: shippingData.fullName,
+              email: shippingData.email,
+              phone: shippingData.phone,
+              address: {
+                line1: shippingData.street,
+                city: shippingData.city,
+                state: shippingData.state,
+                postal_code: shippingData.zipCode,
+                country: shippingData.country.length === 2 ? shippingData.country.toUpperCase() : undefined,
+              },
+            },
+          },
+        });
+
+        if (confirmation.error) {
+          throw new Error(confirmation.error.message || "Card payment failed.");
+        }
+
+        if (confirmation.paymentIntent?.status !== "succeeded") {
+          throw new Error("Card payment was not completed.");
+        }
       }
 
       // Track purchase analytics
@@ -249,6 +321,7 @@ export default function CheckoutPage() {
       // Set order ID and move to confirmation
       setOrderId(payload.order.id);
       setCurrentStep("confirmation");
+      setCheckoutAttemptId(globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
       window.scrollTo({ top: 0, behavior: "smooth" });
 
       toast({
@@ -529,7 +602,30 @@ export default function CheckoutPage() {
                     })}
                   </div>
 
-                  {paymentData.method !== "cash_on_delivery" && (
+                  {paymentData.method === "card" && (
+                    <div className="rounded-md border p-4">
+                      <p className="font-medium">Secure Card Payment</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Card details are handled by Stripe and are not stored by Mercato.
+                      </p>
+                      <div className="mt-4 rounded-md border bg-background px-3 py-4">
+                        <CardElement
+                          options={{
+                            hidePostalCode: true,
+                            style: {
+                              base: {
+                                fontSize: "16px",
+                                color: "hsl(var(--foreground))",
+                                "::placeholder": { color: "hsl(var(--muted-foreground))" },
+                              },
+                            },
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentData.method !== "card" && paymentData.method !== "cash_on_delivery" && (
                     <div className="rounded-md border p-4">
                       <p className="font-medium">Manual Payment Verification</p>
                       <p className="mt-1 text-sm text-muted-foreground">

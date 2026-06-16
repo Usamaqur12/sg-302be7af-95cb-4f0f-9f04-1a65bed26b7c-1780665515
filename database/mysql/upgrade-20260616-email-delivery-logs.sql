@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS email_delivery_logs (
+  id CHAR(36) PRIMARY KEY,
+  email_type VARCHAR(120) NOT NULL,
+  recipient VARCHAR(255) NOT NULL,
+  subject VARCHAR(255) NOT NULL,
+  from_address VARCHAR(255) NOT NULL,
+  html_body MEDIUMTEXT NOT NULL,
+  status ENUM('queued', 'sending', 'sent', 'failed', 'skipped') NOT NULL DEFAULT 'queued',
+  attempt_count INT NOT NULL DEFAULT 0,
+  max_attempts INT NOT NULL DEFAULT 3,
+  provider_message_id VARCHAR(255),
+  last_error TEXT,
+  metadata JSON,
+  next_retry_at DATETIME,
+  sent_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_email_delivery_status (status, next_retry_at),
+  INDEX idx_email_delivery_type (email_type),
+  INDEX idx_email_delivery_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

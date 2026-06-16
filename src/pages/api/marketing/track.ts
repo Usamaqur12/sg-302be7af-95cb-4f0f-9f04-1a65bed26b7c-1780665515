@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { RowDataPacket } from "mysql2/promise";
 import { canUseLocalDevAuthFallback, getDatabaseSetupMessage, withTransaction } from "@/lib/server/db";
 import { readLocalDatabase, writeLocalDatabase, type LocalRecord } from "@/lib/server/local-db";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 
 type MarketingAdEventType = "impression" | "click" | "conversion";
 
@@ -254,6 +255,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+  if (await enforceRateLimit(req, res, { key: "marketing-track", limit: 120, windowMs: 60_000 })) {
+    return;
   }
 
   const body = parseBody(req);

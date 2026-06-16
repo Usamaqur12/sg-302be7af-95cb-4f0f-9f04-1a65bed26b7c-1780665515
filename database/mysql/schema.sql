@@ -436,13 +436,73 @@ CREATE TABLE IF NOT EXISTS payments (
   id CHAR(36) PRIMARY KEY,
   order_id CHAR(36) NOT NULL UNIQUE,
   payment_method VARCHAR(80) NOT NULL,
+  provider VARCHAR(40),
+  provider_payment_intent_id VARCHAR(191),
+  provider_charge_id VARCHAR(191),
+  provider_refund_id VARCHAR(191),
+  idempotency_key VARCHAR(191),
   transaction_id VARCHAR(191),
   payment_proof_url TEXT,
+  failure_message TEXT,
   amount DECIMAL(10,2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'pkr',
+  refunded_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   status ENUM('pending', 'completed', 'failed', 'refunded') NOT NULL DEFAULT 'pending',
   paid_at DATETIME,
+  refunded_at DATETIME,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_payments_provider_intent (provider_payment_intent_id),
+  UNIQUE KEY uniq_payments_idempotency_key (idempotency_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payment_refunds (
+  id CHAR(36) PRIMARY KEY,
+  payment_id CHAR(36) NOT NULL,
+  order_id CHAR(36) NOT NULL,
+  provider VARCHAR(40) NOT NULL DEFAULT 'stripe',
+  provider_refund_id VARCHAR(191),
+  amount DECIMAL(10,2) NOT NULL,
+  reason VARCHAR(191),
+  status VARCHAR(80) NOT NULL DEFAULT 'pending',
+  idempotency_key VARCHAR(191),
+  created_by CHAR(36),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payment_refunds_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+  CONSTRAINT fk_payment_refunds_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_payment_refunds_provider_refund (provider_refund_id),
+  UNIQUE KEY uniq_payment_refunds_idempotency_key (idempotency_key),
+  INDEX idx_payment_refunds_payment (payment_id),
+  INDEX idx_payment_refunds_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+  id CHAR(36) PRIMARY KEY,
+  provider_event_id VARCHAR(191) NOT NULL,
+  event_type VARCHAR(191) NOT NULL,
+  payment_intent_id VARCHAR(191),
+  processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_stripe_webhook_event (provider_event_id),
+  INDEX idx_stripe_webhook_payment_intent (payment_intent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payment_status_events (
+  id CHAR(36) PRIMARY KEY,
+  payment_id CHAR(36) NOT NULL,
+  order_id CHAR(36) NOT NULL,
+  status VARCHAR(80) NOT NULL,
+  source VARCHAR(80) NOT NULL,
+  provider_event_id VARCHAR(191),
+  provider_object_id VARCHAR(191),
+  message TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payment_status_events_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+  CONSTRAINT fk_payment_status_events_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  INDEX idx_payment_status_events_payment (payment_id),
+  INDEX idx_payment_status_events_order (order_id),
+  INDEX idx_payment_status_events_provider_event (provider_event_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS seller_earnings (
@@ -475,6 +535,193 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_withdrawals_seller FOREIGN KEY (seller_id) REFERENCES seller_profiles(id) ON DELETE CASCADE,
   CONSTRAINT fk_withdrawals_admin FOREIGN KEY (approved_by) REFERENCES profiles(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payment_events (
+  id CHAR(36) PRIMARY KEY,
+  payment_id CHAR(36),
+  order_id CHAR(36) NOT NULL,
+  provider VARCHAR(120) NOT NULL,
+  event_type VARCHAR(120) NOT NULL,
+  event_status ENUM('received', 'processed', 'ignored', 'failed') NOT NULL DEFAULT 'received',
+  provider_event_id VARCHAR(191),
+  provider_payment_id VARCHAR(191),
+  amount DECIMAL(12,2),
+  currency VARCHAR(10) NOT NULL DEFAULT 'PKR',
+  payload JSON NOT NULL,
+  received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  processed_at DATETIME,
+  error_message TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payment_events_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
+  CONSTRAINT fk_payment_events_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_payment_events_provider_event (provider, provider_event_id),
+  INDEX idx_payment_events_order (order_id),
+  INDEX idx_payment_events_payment (payment_id),
+  INDEX idx_payment_events_status (event_status, received_at),
+  INDEX idx_payment_events_provider_payment (provider, provider_payment_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS refund_records (
+  id CHAR(36) PRIMARY KEY,
+  order_id CHAR(36) NOT NULL,
+  payment_id CHAR(36),
+  return_request_id CHAR(36),
+  requested_by CHAR(36),
+  approved_by CHAR(36),
+  amount DECIMAL(12,2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'PKR',
+  reason TEXT NOT NULL,
+  status ENUM('requested', 'approved', 'processing', 'completed', 'failed', 'cancelled') NOT NULL DEFAULT 'requested',
+  provider VARCHAR(120),
+  provider_refund_id VARCHAR(191),
+  notes TEXT,
+  requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  approved_at DATETIME,
+  processed_at DATETIME,
+  completed_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_refund_records_amount CHECK (amount > 0),
+  CONSTRAINT fk_refund_records_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_refund_records_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
+  CONSTRAINT fk_refund_records_requested_by FOREIGN KEY (requested_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  CONSTRAINT fk_refund_records_approved_by FOREIGN KEY (approved_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  UNIQUE KEY uniq_refund_records_provider_refund (provider, provider_refund_id),
+  INDEX idx_refund_records_order (order_id),
+  INDEX idx_refund_records_payment (payment_id),
+  INDEX idx_refund_records_return_request (return_request_id),
+  INDEX idx_refund_records_status (status, requested_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payout_batches (
+  id CHAR(36) PRIMARY KEY,
+  batch_number VARCHAR(120) NOT NULL UNIQUE,
+  status ENUM('draft', 'approved', 'processing', 'paid', 'failed', 'cancelled') NOT NULL DEFAULT 'draft',
+  currency VARCHAR(10) NOT NULL DEFAULT 'PKR',
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  total_fees DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  net_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  item_count INT NOT NULL DEFAULT 0,
+  payout_method VARCHAR(120),
+  payout_reference VARCHAR(191),
+  scheduled_for DATE,
+  approved_by CHAR(36),
+  approved_at DATETIME,
+  processed_at DATETIME,
+  completed_at DATETIME,
+  notes TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payout_batches_approved_by FOREIGN KEY (approved_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  INDEX idx_payout_batches_status (status, scheduled_for),
+  INDEX idx_payout_batches_reference (payout_reference)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payout_batch_items (
+  id CHAR(36) PRIMARY KEY,
+  payout_batch_id CHAR(36) NOT NULL,
+  seller_id CHAR(36) NOT NULL,
+  seller_earning_id CHAR(36),
+  withdrawal_request_id CHAR(36),
+  amount DECIMAL(12,2) NOT NULL,
+  fee_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  net_amount DECIMAL(12,2) NOT NULL,
+  status ENUM('pending', 'included', 'paid', 'failed', 'withheld') NOT NULL DEFAULT 'pending',
+  failure_reason TEXT,
+  paid_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_payout_batch_items_amount CHECK (amount >= 0),
+  CONSTRAINT chk_payout_batch_items_net_amount CHECK (net_amount >= 0),
+  CONSTRAINT chk_payout_batch_items_source CHECK (seller_earning_id IS NOT NULL OR withdrawal_request_id IS NOT NULL),
+  CONSTRAINT fk_payout_batch_items_batch FOREIGN KEY (payout_batch_id) REFERENCES payout_batches(id) ON DELETE CASCADE,
+  CONSTRAINT fk_payout_batch_items_seller FOREIGN KEY (seller_id) REFERENCES seller_profiles(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_payout_batch_items_earning FOREIGN KEY (seller_earning_id) REFERENCES seller_earnings(id) ON DELETE SET NULL,
+  CONSTRAINT fk_payout_batch_items_withdrawal FOREIGN KEY (withdrawal_request_id) REFERENCES withdrawal_requests(id) ON DELETE SET NULL,
+  INDEX idx_payout_batch_items_batch (payout_batch_id),
+  INDEX idx_payout_batch_items_seller (seller_id, status),
+  INDEX idx_payout_batch_items_earning (seller_earning_id),
+  INDEX idx_payout_batch_items_withdrawal (withdrawal_request_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS cod_reconciliations (
+  id CHAR(36) PRIMARY KEY,
+  order_id CHAR(36) NOT NULL UNIQUE,
+  payment_id CHAR(36),
+  courier_name VARCHAR(120),
+  courier_reference VARCHAR(191),
+  expected_amount DECIMAL(12,2) NOT NULL,
+  collected_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  remitted_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  courier_fee DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  discrepancy_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  currency VARCHAR(10) NOT NULL DEFAULT 'PKR',
+  status ENUM('awaiting_collection', 'collected', 'partially_remitted', 'reconciled', 'short_paid', 'over_paid', 'disputed', 'written_off') NOT NULL DEFAULT 'awaiting_collection',
+  collected_at DATETIME,
+  remitted_at DATETIME,
+  reconciled_at DATETIME,
+  reconciled_by CHAR(36),
+  notes TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_cod_reconciliations_expected CHECK (expected_amount >= 0),
+  CONSTRAINT chk_cod_reconciliations_collected CHECK (collected_amount >= 0),
+  CONSTRAINT chk_cod_reconciliations_remitted CHECK (remitted_amount >= 0),
+  CONSTRAINT chk_cod_reconciliations_fee CHECK (courier_fee >= 0),
+  CONSTRAINT fk_cod_reconciliations_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cod_reconciliations_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
+  CONSTRAINT fk_cod_reconciliations_reconciled_by FOREIGN KEY (reconciled_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  INDEX idx_cod_reconciliations_status (status, created_at),
+  INDEX idx_cod_reconciliations_payment (payment_id),
+  INDEX idx_cod_reconciliations_courier (courier_name, courier_reference)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS finance_ledger_entries (
+  id CHAR(36) PRIMARY KEY,
+  entry_number VARCHAR(120) NOT NULL UNIQUE,
+  entry_type VARCHAR(120) NOT NULL,
+  direction ENUM('debit', 'credit') NOT NULL,
+  status ENUM('pending', 'posted', 'voided') NOT NULL DEFAULT 'pending',
+  account_code VARCHAR(120) NOT NULL,
+  seller_id CHAR(36),
+  customer_id CHAR(36),
+  order_id CHAR(36),
+  order_item_id CHAR(36),
+  payment_id CHAR(36),
+  payment_event_id CHAR(36),
+  refund_record_id CHAR(36),
+  payout_batch_id CHAR(36),
+  payout_batch_item_id CHAR(36),
+  cod_reconciliation_id CHAR(36),
+  amount DECIMAL(12,2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'PKR',
+  memo TEXT,
+  idempotency_key VARCHAR(191) UNIQUE,
+  posted_at DATETIME,
+  voided_at DATETIME,
+  metadata JSON NOT NULL,
+  created_by CHAR(36),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_finance_ledger_entries_amount CHECK (amount >= 0),
+  CONSTRAINT fk_finance_ledger_entries_seller FOREIGN KEY (seller_id) REFERENCES seller_profiles(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_customer FOREIGN KEY (customer_id) REFERENCES profiles(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_order_item FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_payment_event FOREIGN KEY (payment_event_id) REFERENCES payment_events(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_refund FOREIGN KEY (refund_record_id) REFERENCES refund_records(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_payout_batch FOREIGN KEY (payout_batch_id) REFERENCES payout_batches(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_payout_item FOREIGN KEY (payout_batch_item_id) REFERENCES payout_batch_items(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_cod FOREIGN KEY (cod_reconciliation_id) REFERENCES cod_reconciliations(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_ledger_entries_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  INDEX idx_finance_ledger_entries_status (status, posted_at),
+  INDEX idx_finance_ledger_entries_account (account_code, direction),
+  INDEX idx_finance_ledger_entries_order (order_id),
+  INDEX idx_finance_ledger_entries_seller (seller_id),
+  INDEX idx_finance_ledger_entries_payment (payment_id),
+  INDEX idx_finance_ledger_entries_refund (refund_record_id),
+  INDEX idx_finance_ledger_entries_payout (payout_batch_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS reviews (
@@ -685,6 +932,32 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS rate_limit_counters (
+  bucket_key VARCHAR(255) PRIMARY KEY,
+  rate_limit_key VARCHAR(120) NOT NULL,
+  ip_address VARCHAR(80) NOT NULL,
+  request_count INT NOT NULL DEFAULT 0,
+  window_reset_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_rate_limit_key (rate_limit_key),
+  INDEX idx_rate_limit_reset (window_reset_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS abuse_audit_events (
+  id CHAR(36) PRIMARY KEY,
+  event_type VARCHAR(80) NOT NULL,
+  rate_limit_key VARCHAR(120),
+  ip_address VARCHAR(80),
+  user_agent VARCHAR(500),
+  metadata JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_abuse_event_type (event_type),
+  INDEX idx_abuse_rate_limit_key (rate_limit_key),
+  INDEX idx_abuse_ip_created (ip_address, created_at),
+  INDEX idx_abuse_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS admin_audit_logs (
   id CHAR(36) PRIMARY KEY,
   admin_id CHAR(36) NOT NULL,
@@ -697,6 +970,50 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
   INDEX idx_admin_audit_admin (admin_id),
   INDEX idx_admin_audit_table (table_name, record_id),
   INDEX idx_admin_audit_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS upload_files (
+  id CHAR(36) PRIMARY KEY,
+  owner_id CHAR(36) NOT NULL,
+  scope ENUM('product', 'seller-logo', 'seller-banner', 'kyc', 'cms', 'category', 'payment-proof') NOT NULL,
+  storage ENUM('public', 'private') NOT NULL,
+  url TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  size_bytes BIGINT UNSIGNED NOT NULL,
+  review_status ENUM('pending', 'approved', 'manual_review') NOT NULL DEFAULT 'pending',
+  retention_days INT,
+  expires_at DATETIME,
+  deleted_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_upload_files_owner FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE CASCADE,
+  INDEX idx_upload_files_owner_scope (owner_id, scope, created_at),
+  INDEX idx_upload_files_scope_status (scope, review_status),
+  INDEX idx_upload_files_expires (expires_at, deleted_at),
+  INDEX idx_upload_files_deleted (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS email_delivery_logs (
+  id CHAR(36) PRIMARY KEY,
+  email_type VARCHAR(120) NOT NULL,
+  recipient VARCHAR(255) NOT NULL,
+  subject VARCHAR(255) NOT NULL,
+  from_address VARCHAR(255) NOT NULL,
+  html_body MEDIUMTEXT NOT NULL,
+  status ENUM('queued', 'sending', 'sent', 'failed', 'skipped') NOT NULL DEFAULT 'queued',
+  attempt_count INT NOT NULL DEFAULT 0,
+  max_attempts INT NOT NULL DEFAULT 3,
+  provider_message_id VARCHAR(255),
+  last_error TEXT,
+  metadata JSON,
+  next_retry_at DATETIME,
+  sent_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_email_delivery_status (status, next_retry_at),
+  INDEX idx_email_delivery_type (email_type),
+  INDEX idx_email_delivery_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO system_settings (id, `key`, value, description) VALUES

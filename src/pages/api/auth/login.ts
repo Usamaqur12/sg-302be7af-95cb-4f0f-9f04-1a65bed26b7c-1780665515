@@ -8,6 +8,7 @@ import {
   queryRows,
 } from "@/lib/server/db";
 import { findLocalProfileByEmail } from "@/lib/server/local-db";
+import { logServerEvent } from "@/lib/server/observability";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
 import {
   createSessionToken,
@@ -31,7 +32,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
-  if (enforceRateLimit(req, res, { key: "auth-login", limit: 8, windowMs: 60_000 })) {
+  if (await enforceRateLimit(req, res, { key: "auth-login", limit: 8, windowMs: 60_000 })) {
+    return;
+  }
+  const accountScope =
+    typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : null;
+  if (
+    accountScope &&
+    await enforceRateLimit(req, res, {
+      key: "auth-login-account",
+      limit: 12,
+      windowMs: 10 * 60_000,
+      scope: accountScope,
+    })
+  ) {
     return;
   }
 
@@ -52,6 +66,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         typeof localUser.password_hash !== "string" ||
         !(await bcrypt.compare(validation.data.password, localUser.password_hash))
       ) {
+        logServerEvent({
+          event: "auth_login_failed",
+          level: "warn",
+          req,
+          target: { email, mode: "local_fallback" },
+          details: { reason: "invalid_credentials" },
+        });
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
@@ -85,6 +106,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const user = users[0];
 
     if (!user || !user.is_active || !(await bcrypt.compare(validation.data.password, user.password_hash))) {
+      logServerEvent({
+        event: "auth_login_failed",
+        level: "warn",
+        req,
+        target: { email, mode: "mysql" },
+        details: { reason: !user ? "not_found" : !user.is_active ? "inactive" : "invalid_credentials" },
+      });
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
@@ -102,6 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
   } catch (error) {
+    logServerEvent({ event: "auth_login_error", level: "error", req, error });
     return res.status(503).json({
       error: getDatabaseSetupMessage(error),
     });

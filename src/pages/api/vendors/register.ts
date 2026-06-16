@@ -9,6 +9,7 @@ import {
 } from "@/lib/api-response";
 import { canUseLocalDevAuthFallback, withTransaction } from "@/lib/server/db";
 import { createLocalSeller, type LocalSellerRegistrationInput } from "@/lib/server/local-db";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 import { sellerRegistrationSchema, validateSchema } from "@/lib/validation";
 import { getErrorMessage } from "@/lib/errors";
 
@@ -38,6 +39,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json(errorResponse("Method not allowed"));
+  }
+  if (await enforceRateLimit(req, res, { key: "seller-register", limit: 5, windowMs: 10 * 60_000 })) {
+    return;
+  }
+  const accountScope =
+    typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : null;
+  if (
+    accountScope &&
+    await enforceRateLimit(req, res, {
+      key: "seller-register-account",
+      limit: 3,
+      windowMs: 60 * 60_000,
+      scope: accountScope,
+    })
+  ) {
+    return;
   }
 
   const validation = validateSchema(sellerRegistrationSchema, req.body);

@@ -13,6 +13,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { csrfHeaders } from "@/lib/csrf";
 import type { Database } from "@/integrations/supabase/database.types";
 import { getErrorMessage } from "@/lib/errors";
 
@@ -22,6 +23,9 @@ interface Payment {
   id: string;
   amount: number;
   payment_method: string;
+  provider: string | null;
+  provider_payment_intent_id: string | null;
+  refunded_amount: number | null;
   status: PaymentStatus | null;
   transaction_id: string | null;
   payment_proof_url: string | null;
@@ -60,6 +64,9 @@ export default function AdminPaymentsPage() {
         id,
         amount,
         payment_method,
+        provider,
+        provider_payment_intent_id,
+        refunded_amount,
         status,
         transaction_id,
         payment_proof_url,
@@ -85,6 +92,45 @@ export default function AdminPaymentsPage() {
 
   const updatePaymentStatus = useCallback(async (payment: Payment, status: PaymentStatus) => {
     const timestamp = new Date().toISOString();
+    if (status === "refunded" && payment.provider === "stripe") {
+      const response = await fetch(`/api/payments/${payment.id}/refund`, {
+        method: "POST",
+        headers: csrfHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
+        body: JSON.stringify({
+          amount: Math.max(0, Number(payment.amount) - Number(payment.refunded_amount || 0)),
+          reason: "admin_refund",
+          idempotency_key: `admin-refund:${payment.id}:${Date.now()}`,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        toast({
+          title: "Refund failed",
+          description: getErrorMessage(payload?.error, "Could not create the Stripe refund."),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setPayments((current) =>
+        current.map((item) => item.id === payment.id
+          ? {
+              ...item,
+              status: payload.refund?.fullyRefunded ? "refunded" : item.status,
+              refunded_amount: Number(item.refunded_amount || 0) + Number(payload.refund?.amount || 0),
+            }
+          : item)
+      );
+      toast({
+        title: "Refund created",
+        description: `Stripe refund ${payload.refund?.id || ""} was submitted.`,
+      });
+      await loadPayments();
+      return;
+    }
+
     const update: Database["public"]["Tables"]["payments"]["Update"] = {
       status,
       paid_at: status === "completed" ? timestamp : payment.paid_at,
@@ -134,7 +180,7 @@ export default function AdminPaymentsPage() {
       title: "Payment updated",
       description: `${payment.transaction_id || payment.id} marked ${status} and synced with the order.`,
     });
-  }, [toast]);
+  }, [loadPayments, toast]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -236,6 +282,9 @@ export default function AdminPaymentsPage() {
                             {payment.status && (
                               <Badge className={statusColors[payment.status]}>{payment.status}</Badge>
                             )}
+                            {payment.provider === "stripe" && (
+                              <Badge variant="outline">Stripe</Badge>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {payment.order?.order_number || "No order"} - {customer}
@@ -244,6 +293,11 @@ export default function AdminPaymentsPage() {
                             {payment.payment_method}
                             {paymentDate ? ` - ${new Date(paymentDate).toLocaleDateString()}` : ""}
                           </p>
+                          {payment.provider_payment_intent_id && (
+                            <p className="text-xs text-muted-foreground">
+                              Intent: <span className="font-mono">{payment.provider_payment_intent_id}</span>
+                            </p>
+                          )}
                           {payment.payment_proof_url && (
                             <a
                               href={payment.payment_proof_url}

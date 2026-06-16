@@ -1,9 +1,137 @@
 import { Resend } from "resend";
+import {
+  createEmailDeliveryLog,
+  emailErrorMessage,
+  getEmailDeliveryLog,
+  updateEmailDeliveryLog,
+  type EmailDeliveryLog,
+} from "@/lib/server/email-delivery";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const EMAIL_MAX_ATTEMPTS = Number(process.env.EMAIL_MAX_ATTEMPTS || 3);
+const EMAIL_RETRY_BASE_DELAY_MS = Number(process.env.EMAIL_RETRY_BASE_DELAY_MS || 500);
 
 export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY);
+}
+
+type SendEmailInput = {
+  emailType: string;
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  metadata?: Record<string, unknown>;
+  existingLog?: EmailDeliveryLog;
+};
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function providerMessageId(result: unknown) {
+  if (!result || typeof result !== "object") return null;
+  const data = "data" in result ? (result as { data?: unknown }).data : result;
+  if (!data || typeof data !== "object" || !("id" in data)) return null;
+  const id = (data as { id?: unknown }).id;
+  return typeof id === "string" ? id : null;
+}
+
+function providerError(result: unknown) {
+  if (!result || typeof result !== "object" || !("error" in result)) return null;
+  return (result as { error?: unknown }).error ?? null;
+}
+
+async function sendTransactionalEmail(input: SendEmailInput) {
+  const log = input.existingLog ?? await createEmailDeliveryLog({
+    emailType: input.emailType,
+    recipient: input.to,
+    subject: input.subject,
+    fromAddress: input.from,
+    htmlBody: input.html,
+    maxAttempts: EMAIL_MAX_ATTEMPTS,
+    metadata: input.metadata,
+  });
+
+  if (!isEmailConfigured() || !resend) {
+    await updateEmailDeliveryLog(log.id, {
+      status: "skipped",
+      last_error: "RESEND_API_KEY is not configured",
+      next_retry_at: null,
+    });
+    return;
+  }
+
+  let lastError: unknown = null;
+  const startAttempt = Math.max(0, log.attempt_count);
+
+  for (let attempt = startAttempt + 1; attempt <= log.max_attempts; attempt += 1) {
+    await updateEmailDeliveryLog(log.id, {
+      status: "sending",
+      attempt_count: attempt,
+      last_error: null,
+      next_retry_at: null,
+    });
+
+    try {
+      const result = await resend.emails.send({
+        from: input.from,
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+      });
+      const error = providerError(result);
+      if (error) throw error;
+
+      await updateEmailDeliveryLog(log.id, {
+        status: "sent",
+        provider_message_id: providerMessageId(result),
+        sent_at: new Date().toISOString(),
+        last_error: null,
+        next_retry_at: null,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      const canRetry = attempt < log.max_attempts;
+      await updateEmailDeliveryLog(log.id, {
+        status: canRetry ? "queued" : "failed",
+        last_error: emailErrorMessage(error),
+        next_retry_at: canRetry ? new Date(Date.now() + EMAIL_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)).toISOString() : null,
+      });
+
+      if (canRetry) {
+        await wait(EMAIL_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(emailErrorMessage(lastError));
+}
+
+export async function retryEmailDelivery(logId: string) {
+  const log = await getEmailDeliveryLog(logId);
+  if (!log) throw new Error("Email delivery log not found");
+  if (log.status === "sent") return log;
+
+  await updateEmailDeliveryLog(log.id, {
+    status: "queued",
+    attempt_count: 0,
+    last_error: null,
+    next_retry_at: null,
+  });
+
+  await sendTransactionalEmail({
+    emailType: log.email_type,
+    from: log.from_address,
+    to: log.recipient,
+    subject: log.subject,
+    html: log.html_body,
+    metadata: log.metadata ?? undefined,
+    existingLog: { ...log, attempt_count: 0, status: "queued", last_error: null, next_retry_at: null },
+  });
+
+  return getEmailDeliveryLog(log.id);
 }
 
 export const emailService = {
@@ -23,15 +151,14 @@ export const emailService = {
     orderDate: string;
   }) {
     try {
-      if (!isEmailConfigured()) return;
-      const emailClient = resend;
-      if (!emailClient) return;
       const { to, customerName, orderNumber, orderTotal, orderItems, orderDate } = data;
 
-      await emailClient.emails.send({
+      await sendTransactionalEmail({
+        emailType: "order_confirmation",
         from: "Marketplace <orders@yourdomain.com>",
         to,
         subject: `Order Confirmation - ${orderNumber}`,
+        metadata: { orderNumber },
         html: `
           <!DOCTYPE html>
           <html>
@@ -109,16 +236,15 @@ export const emailService = {
     reason?: string;
   }) {
     try {
-      if (!isEmailConfigured()) return;
-      const emailClient = resend;
-      if (!emailClient) return;
       const { to, businessName, status, reason } = data;
 
       if (status === "approved") {
-        await emailClient.emails.send({
+        await sendTransactionalEmail({
+          emailType: "seller_approval",
           from: "Marketplace <admin@yourdomain.com>",
           to,
           subject: "🎉 Your Seller Account Has Been Approved!",
+          metadata: { status, businessName },
           html: `
             <!DOCTYPE html>
             <html>
@@ -173,10 +299,12 @@ export const emailService = {
           `,
         });
       } else {
-        await emailClient.emails.send({
+        await sendTransactionalEmail({
+          emailType: "seller_rejection",
           from: "Marketplace <admin@yourdomain.com>",
           to,
           subject: "Update on Your Seller Application",
+          metadata: { status, businessName },
           html: `
             <!DOCTYPE html>
             <html>
@@ -238,16 +366,15 @@ export const emailService = {
     adminNotes?: string;
   }) {
     try {
-      if (!isEmailConfigured()) return;
-      const emailClient = resend;
-      if (!emailClient) return;
       const { to, businessName, amount, status, requestDate, processedDate, adminNotes } = data;
 
       if (status === "completed") {
-        await emailClient.emails.send({
+        await sendTransactionalEmail({
+          emailType: "payout_completed",
           from: "Marketplace <payouts@yourdomain.com>",
           to,
           subject: `Payout Completed - $${amount.toFixed(2)}`,
+          metadata: { status, amount },
           html: `
             <!DOCTYPE html>
             <html>
@@ -291,10 +418,12 @@ export const emailService = {
           `,
         });
       } else {
-        await emailClient.emails.send({
+        await sendTransactionalEmail({
+          emailType: "payout_rejected",
           from: "Marketplace <payouts@yourdomain.com>",
           to,
           subject: "Payout Request Update",
+          metadata: { status, amount },
           html: `
             <!DOCTYPE html>
             <html>
@@ -366,15 +495,14 @@ export const emailService = {
     }>;
   }) {
     try {
-      if (!isEmailConfigured()) return;
-      const emailClient = resend;
-      if (!emailClient) return;
       const { to, businessName, orderNumber, customerName, orderTotal, orderItems } = data;
 
-      await emailClient.emails.send({
+      await sendTransactionalEmail({
+        emailType: "seller_new_order",
         from: "Marketplace <orders@yourdomain.com>",
         to,
         subject: `New Order Received - ${orderNumber}`,
+        metadata: { orderNumber },
         html: `
           <!DOCTYPE html>
           <html>

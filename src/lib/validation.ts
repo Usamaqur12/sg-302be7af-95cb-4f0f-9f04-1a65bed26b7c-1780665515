@@ -84,6 +84,8 @@ export const createOrderSchema = z.object({
   ]),
   payment_reference: z.string().max(191).optional(),
   payment_proof_url: z.string().optional(),
+  payment_intent_id: z.string().max(191).optional(),
+  idempotency_key: z.string().max(191).optional(),
   customer_notes: z.string().optional(),
 });
 

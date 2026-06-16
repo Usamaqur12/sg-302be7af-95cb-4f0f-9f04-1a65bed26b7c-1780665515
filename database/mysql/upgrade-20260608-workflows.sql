@@ -63,6 +63,28 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
   INDEX idx_admin_audit_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS upload_files (
+  id CHAR(36) PRIMARY KEY,
+  owner_id CHAR(36) NOT NULL,
+  scope ENUM('product', 'seller-logo', 'seller-banner', 'kyc', 'cms', 'category', 'payment-proof') NOT NULL,
+  storage ENUM('public', 'private') NOT NULL,
+  url TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  size_bytes BIGINT UNSIGNED NOT NULL,
+  review_status ENUM('pending', 'approved', 'manual_review') NOT NULL DEFAULT 'pending',
+  retention_days INT,
+  expires_at DATETIME,
+  deleted_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_upload_files_owner FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE CASCADE,
+  INDEX idx_upload_files_owner_scope (owner_id, scope, created_at),
+  INDEX idx_upload_files_scope_status (scope, review_status),
+  INDEX idx_upload_files_expires (expires_at, deleted_at),
+  INDEX idx_upload_files_deleted (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS promotion_requests (
   id CHAR(36) PRIMARY KEY,
   seller_id CHAR(36) NOT NULL,
