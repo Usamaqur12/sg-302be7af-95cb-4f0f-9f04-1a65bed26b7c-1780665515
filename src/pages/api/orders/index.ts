@@ -5,10 +5,13 @@ import { createOrderSchema, validateSchema } from "@/lib/validation";
 import { emailService } from "@/lib/email";
 import { getErrorMessage } from "@/lib/errors";
 import { calculatePromotionSummary, type PromotionLike } from "@/lib/promotions";
-import { canUseLocalDevAuthFallback, withTransaction } from "@/lib/server/db";
+import { createCheckoutFinanceRecords } from "@/lib/server/finance";
+import { canUseLocalDevAuthFallback, queryRows, withTransaction } from "@/lib/server/db";
 import { createLocalOrder, type LocalOrderInput } from "@/lib/server/local-db";
+import { logServerEvent } from "@/lib/server/observability";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
 import { readSession } from "@/lib/server/session";
+import { getStripe, getStripeCurrency, toStripeAmount } from "@/lib/server/stripe";
 
 interface ProductForOrder extends RowDataPacket {
   id: string;
@@ -31,8 +34,20 @@ interface OrderApiResponse {
     total: number;
     items?: Array<{ title: string; quantity: number; price: number }>;
   };
+  payment?: {
+    provider: "stripe";
+    clientSecret: string | null;
+    paymentIntentId: string;
+  };
   error?: string;
   errors?: Array<{ field: string; message: string }>;
+}
+
+interface IdempotentPaymentRow extends RowDataPacket {
+  order_id: string;
+  order_number: string;
+  total: number;
+  provider_payment_intent_id: string | null;
 }
 
 function uniqueStrings(values: string[]) {
@@ -47,17 +62,36 @@ export default async function handler(
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
-  if (enforceRateLimit(req, res, { key: "orders", limit: 20, windowMs: 10 * 60_000 })) {
+  if (await enforceRateLimit(req, res, { key: "orders", limit: 20, windowMs: 10 * 60_000 })) {
     return;
   }
 
   const session = await readSession(req);
   if (!session) {
+    logServerEvent({ event: "checkout_auth_required", level: "warn", req });
     return res.status(401).json({ error: "Authentication required" });
+  }
+  if (
+    await enforceRateLimit(req, res, {
+      key: "orders-account",
+      limit: 8,
+      windowMs: 10 * 60_000,
+      scope: session.id,
+    })
+  ) {
+    return;
   }
 
   const validation = validateSchema(createOrderSchema, req.body);
   if (!validation.success || !validation.data) {
+    logServerEvent({
+      event: "checkout_validation_failed",
+      level: "warn",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      details: { errors: validation.errors },
+    });
     return res.status(400).json({
       error: "Invalid order details",
       errors: validation.errors,
@@ -65,25 +99,79 @@ export default async function handler(
   }
 
   const orderInput = validation.data as LocalOrderInput;
+  const idempotencyKey =
+    (typeof orderInput.idempotency_key === "string" && orderInput.idempotency_key.trim()) ||
+    (Array.isArray(req.headers["idempotency-key"])
+      ? req.headers["idempotency-key"][0]
+      : req.headers["idempotency-key"]) ||
+    "";
 
-  const manualPaymentMethod = orderInput.payment_method !== "cash_on_delivery";
+  const cardPaymentMethod = orderInput.payment_method === "card";
+  const manualPaymentMethod = !cardPaymentMethod && orderInput.payment_method !== "cash_on_delivery";
   const hasManualEvidence =
     (typeof orderInput.payment_reference === "string" && orderInput.payment_reference.trim().length > 0) ||
     (typeof orderInput.payment_proof_url === "string" && orderInput.payment_proof_url.trim().length > 0);
 
-  if (!["cash_on_delivery", "bank_transfer", "jazzcash", "easypaisa"].includes(orderInput.payment_method)) {
-    return res.status(400).json({ error: "Unsupported payment method. Manual payments only." });
+  if (!["card", "cash_on_delivery", "bank_transfer", "jazzcash", "easypaisa"].includes(orderInput.payment_method)) {
+    logServerEvent({
+      event: "checkout_payment_method_rejected",
+      level: "warn",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      details: { paymentMethod: orderInput.payment_method },
+    });
+    return res.status(400).json({ error: "Unsupported payment method." });
   }
 
   if (manualPaymentMethod && !hasManualEvidence) {
+    logServerEvent({
+      event: "checkout_payment_evidence_missing",
+      level: "warn",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      details: { paymentMethod: orderInput.payment_method },
+    });
     return res.status(400).json({ error: "Payment method requires a transaction reference or proof." });
+  }
+
+  if (cardPaymentMethod && !idempotencyKey) {
+    logServerEvent({
+      event: "checkout_card_idempotency_missing",
+      level: "warn",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+    });
+    return res.status(400).json({ error: "Card checkout requires an idempotency key." });
   }
 
   const productIds = [...new Set(orderInput.items.map((item) => item.product_id))];
 
   try {
     if (canUseLocalDevAuthFallback()) {
+      if (cardPaymentMethod) {
+        logServerEvent({
+          event: "checkout_card_database_required",
+          level: "error",
+          req,
+          actorId: session.id,
+          actorRole: session.role,
+        });
+        return res.status(503).json({
+          error: "Stripe card checkout requires a configured MySQL database for payment reconciliation.",
+        });
+      }
       const order = await createLocalOrder(session.id, orderInput);
+      logServerEvent({
+        event: "checkout_order_created",
+        req,
+        actorId: session.id,
+        actorRole: session.role,
+        target: { orderId: order.id, orderNumber: order.orderNumber, mode: "local_fallback" },
+        details: { total: order.total, paymentMethod: orderInput.payment_method },
+      });
       void emailService
         .sendOrderConfirmation({
           to: orderInput.shipping_email,
@@ -97,6 +185,48 @@ export default async function handler(
           console.error("Order email failed:", emailError);
         });
       return res.status(201).json({ order });
+    }
+
+    if (cardPaymentMethod) {
+      const existingPayments = await queryRows<IdempotentPaymentRow[]>(
+        `SELECT
+           p.order_id,
+           p.provider_payment_intent_id,
+           o.order_number,
+           o.total
+         FROM payments p
+         INNER JOIN orders o ON o.id = p.order_id
+         WHERE p.idempotency_key = ? AND o.customer_id = ?
+         LIMIT 1`,
+        [idempotencyKey, session.id]
+      );
+
+      if (existingPayments[0]?.provider_payment_intent_id) {
+        const paymentIntent = await getStripe().paymentIntents.retrieve(existingPayments[0].provider_payment_intent_id);
+        logServerEvent({
+          event: "checkout_order_idempotent_replay",
+          req,
+          actorId: session.id,
+          actorRole: session.role,
+          target: {
+            orderId: existingPayments[0].order_id,
+            orderNumber: existingPayments[0].order_number,
+            paymentIntentId: paymentIntent.id,
+          },
+        });
+        return res.status(200).json({
+          order: {
+            id: existingPayments[0].order_id,
+            orderNumber: existingPayments[0].order_number,
+            total: Number(existingPayments[0].total),
+          },
+          payment: {
+            provider: "stripe",
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id,
+          },
+        });
+      }
     }
 
     const order = await withTransaction(async (connection) => {
@@ -202,6 +332,10 @@ export default async function handler(
       const total = promotionSummary.total;
       const orderId = randomUUID();
       const orderNumber = `ORD-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
+      const paymentId = randomUUID();
+      const paymentCurrency = getStripeCurrency();
+      let stripePaymentIntentId: string | null = null;
+      let stripeClientSecret: string | null = null;
 
       await connection.execute<ResultSetHeader>(
         `INSERT INTO orders
@@ -274,17 +408,68 @@ export default async function handler(
         );
       }
 
+      if (cardPaymentMethod) {
+        const paymentIntent = await getStripe().paymentIntents.create(
+          {
+            amount: toStripeAmount(total),
+            currency: paymentCurrency,
+            automatic_payment_methods: { enabled: true },
+            metadata: {
+              order_id: orderId,
+              order_number: orderNumber,
+              customer_id: session.id,
+            },
+          },
+          { idempotencyKey }
+        );
+        stripePaymentIntentId = paymentIntent.id;
+        stripeClientSecret = paymentIntent.client_secret;
+      }
+
       await connection.execute(
         `INSERT INTO payments
-         (id, order_id, amount, payment_method, transaction_id, payment_proof_url, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+         (
+           id, order_id, amount, payment_method, provider, provider_payment_intent_id,
+           idempotency_key, transaction_id, payment_proof_url, currency, status
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
         [
-          randomUUID(),
+          paymentId,
           orderId,
           total,
           orderInput.payment_method || "cash_on_delivery",
+          cardPaymentMethod ? "stripe" : null,
+          stripePaymentIntentId,
+          cardPaymentMethod ? idempotencyKey : null,
           orderInput.payment_reference || null,
           orderInput.payment_proof_url || null,
+          cardPaymentMethod ? paymentCurrency : "PKR",
+        ]
+      );
+
+      await createCheckoutFinanceRecords(connection, {
+        paymentId,
+        orderId,
+        customerId: session.id,
+        paymentMethod: orderInput.payment_method || "cash_on_delivery",
+        provider: cardPaymentMethod ? "stripe" : null,
+        providerPaymentId: stripePaymentIntentId,
+        amount: total,
+        currency: cardPaymentMethod ? paymentCurrency : "PKR",
+        idempotencyKey: cardPaymentMethod ? idempotencyKey : null,
+      });
+
+      await connection.execute(
+        `INSERT INTO payment_status_events
+         (id, payment_id, order_id, status, source, provider_object_id, message)
+         VALUES (?, ?, ?, 'pending', ?, ?, ?)`,
+        [
+          randomUUID(),
+          paymentId,
+          orderId,
+          cardPaymentMethod ? "stripe_payment_intent" : "checkout",
+          stripePaymentIntentId,
+          cardPaymentMethod ? "Stripe PaymentIntent created; awaiting confirmation." : "Payment row created at checkout.",
         ]
       );
 
@@ -300,6 +485,13 @@ export default async function handler(
         id: orderId,
         orderNumber,
         total,
+        payment: stripePaymentIntentId
+          ? {
+              provider: "stripe" as const,
+              clientSecret: stripeClientSecret,
+              paymentIntentId: stripePaymentIntentId,
+            }
+          : undefined,
         items: orderItems.map((item) => ({
           title: item.product_title,
           quantity: item.quantity,
@@ -321,8 +513,41 @@ export default async function handler(
         console.error("Order email failed:", emailError);
       });
 
-    return res.status(201).json({ order });
+    logServerEvent({
+      event: "checkout_order_created",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      target: { orderId: order.id, orderNumber: order.orderNumber, mode: "mysql" },
+      details: {
+        total: order.total,
+        paymentMethod: orderInput.payment_method,
+        stripePaymentIntentId: order.payment?.paymentIntentId || null,
+      },
+    });
+    return res.status(201).json({
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        total: order.total,
+        items: order.items,
+      },
+      payment: order.payment,
+    });
   } catch (error) {
+    logServerEvent({
+      event: "checkout_order_failed",
+      level: "error",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      error,
+      details: {
+        itemCount: orderInput.items.length,
+        paymentMethod: orderInput.payment_method,
+        productIds,
+      },
+    });
     return res.status(400).json({
       error: getErrorMessage(error, "Could not place order"),
     });

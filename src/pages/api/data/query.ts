@@ -4,6 +4,8 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { emailService, isEmailConfigured } from "@/lib/email";
 import { canUseLocalDevAuthFallback, queryRows, withTransaction } from "@/lib/server/db";
 import { localMutate, localSelect, readLocalDatabase, releaseLocalSellerEarnings } from "@/lib/server/local-db";
+import { logServerEvent } from "@/lib/server/observability";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 import { readSession, type SessionUser } from "@/lib/server/session";
 
 type FilterOp = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "ilike" | "in" | "is" | "not_is";
@@ -58,6 +60,8 @@ const TABLES = new Set([
   "customer_addresses",
   "system_settings",
   "admin_audit_logs",
+  "email_delivery_logs",
+  "upload_files",
 ]);
 
 const PUBLIC_READ_TABLES = new Set([
@@ -221,6 +225,16 @@ const PAYOUT_RELEASE_READ_TABLES = new Set([
   "order_items",
 ]);
 
+const AUDITED_STATE_TABLES = new Set([
+  "orders",
+  "payments",
+  "seller_earnings",
+  "withdrawal_requests",
+  "return_requests",
+  "seller_profiles",
+  "products",
+]);
+
 interface SellerAccess {
   id: string;
   status: string;
@@ -262,6 +276,50 @@ function idFilters(query: DataQuery) {
   return (query.filters || [])
     .filter((filter) => filter.column === "id" && filter.op === "eq")
     .map((filter) => String(filter.value));
+}
+
+function metadataStateRows(result: unknown) {
+  const data = (result as { data?: unknown })?.data;
+  if (!data) return [];
+  return Array.isArray(data) ? data : [data];
+}
+
+function redactAuditRow(row: Record<string, unknown>) {
+  const sensitiveKeys = new Set([
+    "password_hash",
+    "kyc_document_url",
+    "cnic_front_url",
+    "cnic_back_url",
+    "owner_cnic",
+    "tax_id",
+    "payment_proof_url",
+    "storage_path",
+  ]);
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [key, sensitiveKeys.has(key) ? "[redacted]" : value])
+  );
+}
+
+async function captureAuditPreviousState(query: DataQuery, useLocalDevDb: boolean) {
+  if (query.operation === "select" || query.operation === "insert") return [];
+  if (!AUDITED_STATE_TABLES.has(query.table)) return [];
+  if (!query.filters?.length) return [];
+
+  const snapshotQuery: DataQuery = {
+    ...query,
+    operation: "select",
+    columns: "*",
+    payload: undefined,
+    order: undefined,
+    limit: 25,
+    range: undefined,
+    single: false,
+    maybeSingle: false,
+    head: false,
+    count: undefined,
+  };
+  const result = useLocalDevDb ? await localSelect(snapshotQuery) : await selectRows(snapshotQuery);
+  return metadataStateRows(result).map((row) => redactAuditRow(row as Record<string, unknown>));
 }
 
 function eqFilters(query: DataQuery, column: string) {
@@ -1225,7 +1283,12 @@ async function ensureCustomerMutationAccess(
   throw new Error("Access denied: this customer action is not allowed");
 }
 
-async function recordAdminAuditLog(query: DataQuery, session: SessionUser, useLocalDevDb: boolean) {
+async function recordAdminAuditLog(
+  query: DataQuery,
+  session: SessionUser,
+  useLocalDevDb: boolean,
+  previousState: Array<Record<string, unknown>> = []
+) {
   if (query.operation === "select" || query.table === "admin_audit_logs") return;
 
   const recordIds = [
@@ -1241,6 +1304,9 @@ async function recordAdminAuditLog(query: DataQuery, session: SessionUser, useLo
     metadata: JSON.stringify({
       record_ids: [...new Set(recordIds)],
       payload_keys: payloadRows(query.payload).flatMap((row) => Object.keys(row)),
+      previous_state: previousState,
+      next_state: payloadRows(query.payload).map((row) => redactAuditRow(row)),
+      actor_role: session.role,
     }),
     created_at: new Date().toISOString(),
   };
@@ -1542,6 +1608,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!query?.table || !TABLES.has(query.table)) {
     return res.status(400).json({ error: "Unsupported table" });
   }
+  if (query.operation !== "select") {
+    const key = query.table === "support_tickets"
+      ? "support-ticket-mutation"
+      : query.table === "admin_audit_logs" || query.table.startsWith("admin_")
+        ? "admin-sensitive-mutation"
+        : "data-mutation";
+    const limit = key === "support-ticket-mutation" ? 12 : key === "admin-sensitive-mutation" ? 60 : 120;
+    if (await enforceRateLimit(req, res, { key, limit, windowMs: 10 * 60_000 })) {
+      return;
+    }
+  }
 
   try {
     const session = await readSession(req);
@@ -1550,6 +1627,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (shouldReleaseSellerEarnings(query)) {
       await releaseDueSellerEarnings(useLocalDevDb);
     }
+    const auditPreviousState =
+      session?.role === "admin" || session?.role === "manager"
+        ? await captureAuditPreviousState(query, useLocalDevDb)
+        : [];
     if (useLocalDevDb) {
       const rawResult = query.operation === "select"
         ? await localSelect(query)
@@ -1562,7 +1643,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await releaseDueSellerEarnings(useLocalDevDb);
       }
       if (session?.role === "admin" || session?.role === "manager") {
-        await recordAdminAuditLog(query, session, useLocalDevDb);
+        await recordAdminAuditLog(query, session, useLocalDevDb, auditPreviousState);
         void notifySellerStatusIfNeeded(query, useLocalDevDb).catch((emailError) => {
           console.error("Seller status email failed:", emailError);
         });
@@ -1581,7 +1662,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await releaseDueSellerEarnings(useLocalDevDb);
     }
     if (session?.role === "admin" || session?.role === "manager") {
-      await recordAdminAuditLog(query, session, useLocalDevDb);
+      await recordAdminAuditLog(query, session, useLocalDevDb, auditPreviousState);
       void notifySellerStatusIfNeeded(query, useLocalDevDb).catch((emailError) => {
         console.error("Seller status email failed:", emailError);
       });
@@ -1594,6 +1675,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : message.includes("Access denied") || message.includes("not approved")
         ? 403
         : 500;
+    logServerEvent({
+      event: "data_query_failed",
+      level: status >= 500 ? "error" : "warn",
+      req,
+      error,
+      target: { table: query.table, operation: query.operation },
+      details: { status },
+    });
     return res.status(status).json({ data: null, error: { message } });
   }
 }

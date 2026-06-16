@@ -30,6 +30,7 @@ next-build*.log
 # local env files
 .env*.local
 .localdb/
+.private/
 /public/uploads/*
 !/public/uploads/.gitkeep
 

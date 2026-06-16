@@ -76,6 +76,8 @@ export interface LocalOrderInput {
   payment_method: string;
   payment_reference?: string;
   payment_proof_url?: string;
+  payment_intent_id?: string;
+  idempotency_key?: string;
   customer_notes?: string;
 }
 
@@ -106,6 +108,8 @@ const TABLES = [
   "customer_addresses",
   "system_settings",
   "admin_audit_logs",
+  "email_delivery_logs",
+  "upload_files",
 ];
 
 const ADMIN_ID = "00000000-0000-4000-8000-000000000001";
@@ -562,6 +566,20 @@ function applyRowDefaults(db: LocalDatabase, table: string, row: LocalRecord) {
 
   if (table === "admin_audit_logs") {
     changed = setDefault(row, "created_at", new Date().toISOString()) || changed;
+  }
+
+  if (table === "email_delivery_logs") {
+    const timestamp = new Date().toISOString();
+    changed = setDefault(row, "status", "queued") || changed;
+    changed = setDefault(row, "attempt_count", 0) || changed;
+    changed = setDefault(row, "max_attempts", 3) || changed;
+    changed = setDefault(row, "provider_message_id", null) || changed;
+    changed = setDefault(row, "last_error", null) || changed;
+    changed = setDefault(row, "metadata", null) || changed;
+    changed = setDefault(row, "next_retry_at", null) || changed;
+    changed = setDefault(row, "sent_at", null) || changed;
+    changed = setDefault(row, "created_at", timestamp) || changed;
+    changed = setDefault(row, "updated_at", timestamp) || changed;
   }
 
   if (table === "promotion_requests") {
@@ -1487,12 +1505,22 @@ export async function createLocalOrder(userId: string, input: LocalOrderInput) {
     id: randomUUID(),
     order_id: orderId,
     payment_method: input.payment_method || "cash_on_delivery",
+    provider: input.payment_method === "card" ? "stripe" : null,
+    provider_payment_intent_id: input.payment_intent_id || null,
+    provider_charge_id: null,
+    provider_refund_id: null,
+    idempotency_key: input.idempotency_key || null,
     transaction_id: input.payment_reference || null,
     payment_proof_url: input.payment_proof_url || null,
+    failure_message: null,
     amount: total,
+    currency: "pkr",
+    refunded_amount: 0,
     status: "pending",
     paid_at: null,
+    refunded_at: null,
     created_at: createdAt,
+    updated_at: createdAt,
   });
 
   const cart = db.carts.find((item) => sameId(item.user_id, userId));

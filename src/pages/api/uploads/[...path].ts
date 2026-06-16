@@ -1,35 +1,26 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { NextApiRequest, NextApiResponse } from "next";
+import { logServerEvent } from "@/lib/server/observability";
 import { readSession } from "@/lib/server/session";
+import {
+  cleanUploadSegment,
+  contentTypesByExtension,
+  findUploadByUrl,
+  isPrivateUploadScope,
+  uploadRoot,
+  type UploadScope,
+} from "@/lib/server/upload-storage";
 
-type PrivateUploadScope = "kyc" | "payment-proof";
-
-const privateScopeAccess: Record<PrivateUploadScope, Array<"admin" | "manager">> = {
+const privateScopeAccess: Record<UploadScope, Array<"admin" | "manager">> = {
+  product: [],
+  "seller-logo": [],
+  "seller-banner": [],
   kyc: ["admin"],
+  cms: [],
+  category: [],
   "payment-proof": ["admin", "manager"],
 };
-
-const contentTypes: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".gif": "image/gif",
-  ".pdf": "application/pdf",
-};
-
-function cleanName(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "upload";
-}
-
-function isPrivateUploadScope(value: string): value is PrivateUploadScope {
-  return value === "kyc" || value === "payment-proof";
-}
 
 function hasUnsafeSegment(value: string) {
   return !value || value === "." || value === ".." || value.includes("/") || value.includes("\\");
@@ -57,19 +48,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const session = await readSession(req);
-  if (!session) return res.status(401).json({ error: "Authentication required" });
+  if (!session) {
+    logServerEvent({
+      event: "private_upload_auth_required",
+      level: "warn",
+      req,
+      target: { scope, ownerFolder, fileName },
+    });
+    return res.status(401).json({ error: "Authentication required" });
+  }
 
-  const isOwner = cleanName(session.id) === ownerFolder;
+  const url = `/api/uploads/${scope}/${ownerFolder}/${fileName}`;
+  const upload = await findUploadByUrl(url);
+  const isOwner = upload ? upload.owner_id === session.id : cleanUploadSegment(session.id) === ownerFolder;
   const isPrivilegedViewer = privateScopeAccess[scope].includes(
     session.role as "admin" | "manager"
   );
   if (!isOwner && !isPrivilegedViewer) {
+    logServerEvent({
+      event: "private_upload_access_denied",
+      level: "warn",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      target: { scope, ownerFolder, fileName },
+    });
     return res.status(403).json({ error: "Access denied" });
   }
 
-  const uploadRoot = path.join(process.cwd(), ".private", "uploads");
-  const filePath = path.join(uploadRoot, scope, ownerFolder, fileName);
-  const resolvedRoot = path.resolve(uploadRoot);
+  const root = uploadRoot("private");
+  const filePath = upload?.storage_path || path.join(root, scope, ownerFolder, fileName);
+  const resolvedRoot = path.resolve(root);
   const resolvedPath = path.resolve(filePath);
   if (!resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) {
     return res.status(404).json({ error: "File not found" });
@@ -80,7 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!fileStat.isFile()) return res.status(404).json({ error: "File not found" });
 
     const extension = path.extname(fileName).toLowerCase();
-    res.setHeader("Content-Type", contentTypes[extension] || "application/octet-stream");
+    res.setHeader("Content-Type", upload?.mime_type || contentTypesByExtension[extension] || "application/octet-stream");
     res.setHeader("Content-Length", String(fileStat.size));
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -88,8 +97,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === "HEAD") return res.status(200).end();
 
     const file = await readFile(resolvedPath);
+    logServerEvent({
+      event: "private_upload_served",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      target: { uploadId: upload?.id || null, scope, ownerFolder, fileName },
+      details: { size: fileStat.size },
+    });
     return res.status(200).send(file);
-  } catch {
+  } catch (error) {
+    logServerEvent({
+      event: "private_upload_missing",
+      level: "warn",
+      req,
+      actorId: session.id,
+      actorRole: session.role,
+      target: { uploadId: upload?.id || null, scope, ownerFolder, fileName },
+      error,
+    });
     return res.status(404).json({ error: "File not found" });
   }
 }
