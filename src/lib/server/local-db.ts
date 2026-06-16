@@ -94,6 +94,14 @@ const TABLES = [
   "orders",
   "order_items",
   "payments",
+  "payment_refunds",
+  "payment_events",
+  "payment_status_events",
+  "refund_records",
+  "finance_ledger_entries",
+  "payout_batches",
+  "payout_batch_items",
+  "cod_reconciliations",
   "seller_earnings",
   "withdrawal_requests",
   "reviews",
@@ -554,6 +562,49 @@ function applyRowDefaults(db: LocalDatabase, table: string, row: LocalRecord) {
     changed = setDefault(row, "released_at", null) || changed;
   }
 
+  if (table === "finance_ledger_entries") {
+    changed = setDefault(row, "entry_number", `FLE-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`) || changed;
+    changed = setDefault(row, "direction", "credit") || changed;
+    changed = setDefault(row, "status", "posted") || changed;
+    changed = setDefault(row, "account_code", "seller_payable") || changed;
+    changed = setDefault(row, "currency", "PKR") || changed;
+    changed = setDefault(row, "memo", null) || changed;
+    changed = setDefault(row, "metadata", {}) || changed;
+    changed = setDefault(row, "created_at", new Date().toISOString()) || changed;
+    changed = setDefault(row, "updated_at", new Date().toISOString()) || changed;
+  }
+
+  if (table === "payout_batches") {
+    changed = setDefault(row, "batch_number", `PO-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`) || changed;
+    changed = setDefault(row, "status", "approved") || changed;
+    changed = setDefault(row, "currency", "PKR") || changed;
+    changed = setDefault(row, "total_amount", 0) || changed;
+    changed = setDefault(row, "total_fees", 0) || changed;
+    changed = setDefault(row, "net_amount", row.total_amount || 0) || changed;
+    changed = setDefault(row, "item_count", 0) || changed;
+    changed = setDefault(row, "payout_method", "manual_bank_export") || changed;
+    changed = setDefault(row, "payout_reference", null) || changed;
+    changed = setDefault(row, "scheduled_for", null) || changed;
+    changed = setDefault(row, "approved_by", null) || changed;
+    changed = setDefault(row, "approved_at", null) || changed;
+    changed = setDefault(row, "processed_at", null) || changed;
+    changed = setDefault(row, "completed_at", null) || changed;
+    changed = setDefault(row, "notes", null) || changed;
+    changed = setDefault(row, "created_at", new Date().toISOString()) || changed;
+    changed = setDefault(row, "updated_at", new Date().toISOString()) || changed;
+  }
+
+  if (table === "payout_batch_items") {
+    changed = setDefault(row, "seller_earning_id", null) || changed;
+    changed = setDefault(row, "withdrawal_request_id", null) || changed;
+    changed = setDefault(row, "fee_amount", 0) || changed;
+    changed = setDefault(row, "net_amount", row.amount || 0) || changed;
+    changed = setDefault(row, "status", "included") || changed;
+    changed = setDefault(row, "failure_reason", null) || changed;
+    changed = setDefault(row, "paid_at", null) || changed;
+    changed = setDefault(row, "created_at", new Date().toISOString()) || changed;
+  }
+
   if (table === "return_requests") {
     changed = setDefault(row, "return_number", `RET-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`) || changed;
     changed = setDefault(row, "status", "requested") || changed;
@@ -562,6 +613,25 @@ function applyRowDefaults(db: LocalDatabase, table: string, row: LocalRecord) {
     changed = setDefault(row, "approved_at", null) || changed;
     changed = setDefault(row, "rejected_at", null) || changed;
     changed = setDefault(row, "refunded_at", null) || changed;
+  }
+
+  if (table === "refund_records") {
+    const timestamp = new Date().toISOString();
+    changed = setDefault(row, "payment_id", null) || changed;
+    changed = setDefault(row, "return_request_id", null) || changed;
+    changed = setDefault(row, "requested_by", null) || changed;
+    changed = setDefault(row, "approved_by", null) || changed;
+    changed = setDefault(row, "currency", "PKR") || changed;
+    changed = setDefault(row, "status", "requested") || changed;
+    changed = setDefault(row, "provider", null) || changed;
+    changed = setDefault(row, "provider_refund_id", null) || changed;
+    changed = setDefault(row, "notes", null) || changed;
+    changed = setDefault(row, "requested_at", timestamp) || changed;
+    changed = setDefault(row, "approved_at", null) || changed;
+    changed = setDefault(row, "processed_at", null) || changed;
+    changed = setDefault(row, "completed_at", null) || changed;
+    changed = setDefault(row, "created_at", timestamp) || changed;
+    changed = setDefault(row, "updated_at", timestamp) || changed;
   }
 
   if (table === "admin_audit_logs") {
@@ -1381,6 +1451,7 @@ export async function createLocalOrder(userId: string, input: LocalOrderInput) {
   const createdAt = now();
   const orderId = randomUUID();
   const orderNumber = `ORD-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const paymentId = randomUUID();
 
   const orderItems = input.items.map((item) => {
     const product = productMap.get(item.product_id);
@@ -1502,7 +1573,7 @@ export async function createLocalOrder(userId: string, input: LocalOrderInput) {
   }
 
   db.payments.push({
-    id: randomUUID(),
+    id: paymentId,
     order_id: orderId,
     payment_method: input.payment_method || "cash_on_delivery",
     provider: input.payment_method === "card" ? "stripe" : null,
@@ -1522,6 +1593,30 @@ export async function createLocalOrder(userId: string, input: LocalOrderInput) {
     created_at: createdAt,
     updated_at: createdAt,
   });
+
+  if ((input.payment_method || "cash_on_delivery") === "cash_on_delivery") {
+    db.cod_reconciliations.push({
+      id: randomUUID(),
+      order_id: orderId,
+      payment_id: paymentId,
+      courier_name: null,
+      courier_reference: null,
+      expected_amount: total,
+      collected_amount: 0,
+      remitted_amount: 0,
+      courier_fee: 0,
+      discrepancy_amount: 0,
+      currency: "PKR",
+      status: "awaiting_collection",
+      collected_at: null,
+      remitted_at: null,
+      reconciled_at: null,
+      reconciled_by: null,
+      notes: null,
+      created_at: createdAt,
+      updated_at: createdAt,
+    });
+  }
 
   const cart = db.carts.find((item) => sameId(item.user_id, userId));
   if (cart) {
