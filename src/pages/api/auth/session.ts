@@ -2,7 +2,12 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { RowDataPacket } from "mysql2";
 import { canUseLocalDevAuthFallback, getDatabaseSetupMessage, queryRows } from "@/lib/server/db";
 import { findLocalProfileById } from "@/lib/server/local-db";
-import { clearSessionCookie, readSession, type MarketplaceRole } from "@/lib/server/session";
+import {
+  clearSessionCookie,
+  ensureCsrfCookie,
+  readSession,
+  type MarketplaceRole,
+} from "@/lib/server/session";
 
 interface ProfileRow extends RowDataPacket {
   id: string;
@@ -21,6 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const session = await readSession(req);
   if (!session) return res.status(200).json({ user: null, profile: null });
+  ensureCsrfCookie(req, res);
 
   if (canUseLocalDevAuthFallback()) {
     const localProfile = await findLocalProfileById(session.id);

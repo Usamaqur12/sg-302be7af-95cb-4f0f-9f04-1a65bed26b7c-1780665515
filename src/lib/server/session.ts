@@ -104,6 +104,22 @@ export function setSessionCookie(res: NextApiResponse, token: string) {
   );
 }
 
+export function ensureCsrfCookie(req: NextApiRequest, res: NextApiResponse) {
+  const existingToken = parse(req.headers.cookie || "")[CSRF_COOKIE_NAME];
+  if (existingToken) return;
+
+  res.setHeader(
+    "Set-Cookie",
+    serialize(CSRF_COOKIE_NAME, randomUUID(), {
+      httpOnly: false,
+      secure: shouldUseSecureCookie(),
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_DURATION_SECONDS,
+    })
+  );
+}
+
 export function clearSessionCookie(res: NextApiResponse) {
   res.setHeader(
     "Set-Cookie",
