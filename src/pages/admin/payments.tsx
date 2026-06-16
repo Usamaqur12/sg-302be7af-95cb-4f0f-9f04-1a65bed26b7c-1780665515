@@ -131,55 +131,36 @@ export default function AdminPaymentsPage() {
       return;
     }
 
-    const update: Database["public"]["Tables"]["payments"]["Update"] = {
-      status,
-      paid_at: status === "completed" ? timestamp : payment.paid_at,
-    };
+    const response = await fetch(`/api/payments/${payment.id}/status`, {
+      method: "POST",
+      headers: csrfHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify({
+        status,
+        idempotency_key: `admin-payment-status:${payment.id}:${status}`,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
 
-    const { error } = await supabase
-      .from("payments")
-      .update(update)
-      .eq("id", payment.id);
-
-    if (error) {
+    if (!response.ok) {
       toast({
         title: "Payment update failed",
-        description: getErrorMessage(error, "Could not update this payment."),
+        description: getErrorMessage(payload?.error, "Could not update this payment."),
         variant: "destructive",
       });
       return;
     }
 
-    if (payment.order?.id && status === "completed") {
-      await supabase
-        .from("orders")
-        .update({ status: "confirmed", updated_at: timestamp })
-        .eq("id", payment.order.id)
-        .in("status", ["pending"]);
-    }
-
-    if (payment.order?.id && status === "failed") {
-      await supabase
-        .from("orders")
-        .update({ status: "cancelled", cancelled_at: timestamp, updated_at: timestamp })
-        .eq("id", payment.order.id)
-        .in("status", ["pending", "confirmed"]);
-    }
-
-    if (payment.order?.id && status === "refunded") {
-      await supabase
-        .from("orders")
-        .update({ status: "refunded", updated_at: timestamp })
-        .eq("id", payment.order.id);
-    }
-
     setPayments((current) =>
-      current.map((item) => item.id === payment.id ? { ...item, ...update } : item)
+      current.map((item) => item.id === payment.id
+        ? { ...item, status, paid_at: status === "completed" ? timestamp : item.paid_at }
+        : item)
     );
     toast({
       title: "Payment updated",
-      description: `${payment.transaction_id || payment.id} marked ${status} and synced with the order.`,
+      description: `${payment.transaction_id || payment.id} marked ${payload.payment?.status || status} and synced with finance events.`,
     });
+    await loadPayments();
   }, [loadPayments, toast]);
 
   useEffect(() => {
@@ -326,7 +307,7 @@ export default function AdminPaymentsPage() {
                                 Mark Failed
                               </Button>
                             )}
-                            {payment.status === "completed" && (
+                            {payment.status === "completed" && payment.provider === "stripe" && (
                               <Button
                                 size="sm"
                                 variant="outline"

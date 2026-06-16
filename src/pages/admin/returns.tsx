@@ -15,6 +15,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { csrfHeaders } from "@/lib/csrf";
 import { getErrorMessage } from "@/lib/errors";
 
 type ReturnStatus = "requested" | "approved" | "rejected" | "received" | "refunded";
@@ -126,37 +127,46 @@ export default function AdminReturnsPage() {
       }
       update.admin_note = adminNote;
 
+      if (status === "refunded") {
+        const { data: payments, error: paymentError } = await supabase
+          .from("payments")
+          .select("id, amount, refunded_amount")
+          .eq("order_id", request.order_id)
+          .limit(1);
+
+        if (paymentError) throw paymentError;
+        const payment = (payments?.[0] ?? null) as { id: string; amount: number; refunded_amount: number | null } | null;
+        if (!payment) throw new Error("No payment record is linked to this return order.");
+
+        const amount = Number(update.refund_amount || refundAmount || 0);
+        const refundableBalance = Math.max(0, Number(payment.amount || 0) - Number(payment.refunded_amount || 0));
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a refund amount greater than zero.");
+        if (amount > refundableBalance) throw new Error("Refund amount exceeds the remaining payment balance.");
+
+        const response = await fetch(`/api/payments/${payment.id}/refund`, {
+          method: "POST",
+          headers: csrfHeaders({ "Content-Type": "application/json" }),
+          credentials: "include",
+          body: JSON.stringify({
+            amount,
+            reason: request.reason || "return_refund",
+            notes: adminNote,
+            return_request_id: request.id,
+            idempotency_key: `return-refund:${request.id}:${payment.id}:${amount}`,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(getErrorMessage(payload?.error, "Could not create the refund transaction."));
+        }
+      }
+
       const { error } = await supabase
         .from("return_requests")
         .update(update)
         .eq("id", request.id);
 
       if (error) throw error;
-
-      if (status === "refunded") {
-        await supabase
-          .from("orders")
-          .update({ status: "refunded", updated_at: timestamp })
-          .eq("id", request.order_id);
-
-        await supabase
-          .from("payments")
-          .update({ status: "refunded" })
-          .eq("order_id", request.order_id);
-
-        const { data: orderItems } = await supabase
-          .from("order_items")
-          .select("id")
-          .eq("order_id", request.order_id);
-
-        const orderItemIds = ((orderItems ?? []) as Array<{ id: string }>).map((item) => item.id);
-        if (orderItemIds.length) {
-          await supabase
-            .from("seller_earnings")
-            .update({ status: "reversed" })
-            .in("order_item_id", orderItemIds);
-        }
-      }
 
       setReturns((current) =>
         current.map((item) => item.id === request.id ? { ...item, ...update } as ReturnRequest : item)
