@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { canUseLocalDevAuthFallback, withTransaction } from "@/lib/server/db";
 import { postRefundLedgerReversal } from "@/lib/server/finance";
+import { emailService } from "@/lib/email";
 import { readLocalDatabase, writeLocalDatabase } from "@/lib/server/local-db";
 import { readSession } from "@/lib/server/session";
 import { getStripe, toStripeAmount } from "@/lib/server/stripe";
@@ -10,7 +11,10 @@ import { getStripe, toStripeAmount } from "@/lib/server/stripe";
 interface PaymentRow extends RowDataPacket {
   id: string;
   order_id: string;
+  order_number: string | null;
   customer_id: string | null;
+  customer_email: string | null;
+  customer_name: string | null;
   payment_method: string;
   provider: string | null;
   provider_payment_intent_id: string | null;
@@ -95,11 +99,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const fullyRefunded = newRefundedAmount >= Number(payment.amount || 0);
       payment.status = fullyRefunded ? "refunded" : payment.status;
       payment.refunded_amount = newRefundedAmount;
-      payment.refunded_at = new Date().toISOString();
-      payment.updated_at = payment.refunded_at;
+      const refundedAt = new Date().toISOString();
+      payment.refunded_at = refundedAt;
+      payment.updated_at = refundedAt;
       payment.provider_refund_id = payment.provider_refund_id || `local-refund-${randomUUID()}`;
 
       const order = db.orders.find((row) => row.id === payment.order_id);
+      const orderNumber = order?.order_number || payment.order_id;
+      const customer = db.profiles.find((row) => row.id === payment.customer_id);
       if (order) {
         if (fullyRefunded) order.status = "refunded";
         order.updated_at = payment.refunded_at;
@@ -331,15 +338,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       await writeLocalDatabase(db);
+      if (customer?.email) {
+        void emailService.sendRefundStatus({
+          to: String(customer.email),
+          customerName: String(customer.full_name || "Customer"),
+          orderNumber: String(orderNumber),
+          refundAmount: amount,
+          status: fullyRefunded ? "succeeded" : "processing",
+          reason,
+          processedAt: refundedAt,
+        }).catch((emailError) => {
+          console.error("Refund status email failed:", emailError);
+        });
+      }
       return res.status(200).json({ refund: { amount, status: "succeeded", fullyRefunded, refundRecordId } });
     }
 
     const result = await withTransaction(async (connection) => {
       const [payments] = await connection.execute<PaymentRow[]>(
-        `SELECT p.id, p.order_id, o.customer_id, p.payment_method, p.provider,
+        `SELECT p.id, p.order_id, o.customer_id, o.order_number,
+                pr.email AS customer_email, pr.full_name AS customer_name,
+                p.payment_method, p.provider,
                 p.provider_payment_intent_id, p.amount, p.currency, p.refunded_amount, p.status
          FROM payments p
          INNER JOIN orders o ON o.id = p.order_id
+         INNER JOIN profiles pr ON pr.id = o.customer_id
          WHERE p.id = ?
          FOR UPDATE`,
         [paymentId]
@@ -360,6 +383,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           amount: Number(existingRefunds[0].amount || 0),
           status: existingRefunds[0].status,
           fullyRefunded: payment.status === "refunded",
+          customerNotification: {
+            email: payment.customer_email,
+            name: payment.customer_name || "Customer",
+            orderNumber: payment.order_number || payment.order_id,
+          },
         };
       }
 
@@ -482,6 +510,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           status: stripeRefund.status,
           fullyRefunded,
           refundRecordId: finance.refundRecordId,
+          customerNotification: {
+            email: payment.customer_email,
+            name: payment.customer_name || "Customer",
+            orderNumber: payment.order_number || payment.order_id,
+          },
         };
       }
 
@@ -575,10 +608,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: "succeeded",
         fullyRefunded,
         refundRecordId: finance.refundRecordId,
+        customerNotification: {
+          email: payment.customer_email,
+          name: payment.customer_name || "Customer",
+          orderNumber: payment.order_number || payment.order_id,
+        },
       };
     });
 
-    return res.status(200).json({ refund: result });
+    if (result) {
+      if (result.status === "succeeded" || result.status === "processing") {
+        const notification = result.customerNotification;
+        if (notification?.email) {
+          void emailService.sendRefundStatus({
+            to: String(notification.email),
+            customerName: String(notification.name || "Customer"),
+            orderNumber: String(notification.orderNumber),
+            refundAmount: Number(result.amount || 0),
+            status: result.status === "succeeded" ? "succeeded" : "processing",
+            reason,
+            processedAt: new Date().toISOString(),
+          }).catch((emailError) => {
+            console.error("Refund status email failed:", emailError);
+          });
+        }
+      }
+    }
+
+    return res.status(200).json({
+      refund: {
+        id: result.id,
+        amount: result.amount,
+        status: result.status,
+        fullyRefunded: result.fullyRefunded,
+        refundRecordId: result.refundRecordId,
+      },
+    });
   } catch (error) {
     return res.status(400).json({
       error: error instanceof Error ? error.message : "Could not refund payment",

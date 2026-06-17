@@ -8,8 +8,20 @@ import {
 } from "@/lib/server/email-delivery";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const EMAIL_MAX_ATTEMPTS = Number(process.env.EMAIL_MAX_ATTEMPTS || 3);
-const EMAIL_RETRY_BASE_DELAY_MS = Number(process.env.EMAIL_RETRY_BASE_DELAY_MS || 500);
+
+function parsePositiveIntEnv(
+  value: string | undefined,
+  fallback: number,
+  minimum = 1,
+  maximum = Number.MAX_SAFE_INTEGER
+) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return fallback;
+  return Math.min(Math.max(minimum, parsed), maximum);
+}
+
+const EMAIL_MAX_ATTEMPTS = parsePositiveIntEnv(process.env.EMAIL_MAX_ATTEMPTS, 3, 1, 10);
+const EMAIL_RETRY_BASE_DELAY_MS = parsePositiveIntEnv(process.env.EMAIL_RETRY_BASE_DELAY_MS, 500, 0, 300000);
 
 export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY);
@@ -222,6 +234,242 @@ export const emailService = {
       });
     } catch (error) {
       console.error("Failed to send order confirmation email:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Send refund status email to customer
+   */
+  async sendRefundStatus(data: {
+    to: string;
+    customerName: string;
+    orderNumber: string;
+    refundAmount: number;
+    status: "succeeded" | "failed" | "processing";
+    currency?: string;
+    reason?: string;
+    processedAt?: string;
+  }) {
+    try {
+      const {
+        to,
+        customerName,
+        orderNumber,
+        refundAmount,
+        status,
+        currency = "PKR",
+        reason,
+        processedAt = new Date().toISOString(),
+      } = data;
+
+      await sendTransactionalEmail({
+        emailType: "refund_status",
+        from: "Marketplace <support@yourdomain.com>",
+        to,
+        subject: `Refund Update - Order ${orderNumber}`,
+        metadata: { orderNumber, status },
+        html: `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: 'IBM Plex Sans', Arial, sans-serif; line-height: 1.6; color: #1a1f2e; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: #1a1f2e; color: white; padding: 30px; text-align: center; }
+                .content { background: #fefdfb; padding: 30px; }
+                .status { background: white; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0; }
+                .footer { text-align: center; color: #6b7280; font-size: 14px; margin-top: 30px; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h1>Refund ${status === "succeeded" ? "Completed" : status === "processing" ? "Processing" : "Update"}</h1>
+                </div>
+                <div class="content">
+                  <p>Hi ${customerName},</p>
+                  <p>We have an update for your refund request on order <strong>${orderNumber}</strong>.</p>
+
+                  <div class="status">
+                    <p><strong>Status:</strong> ${status}</p>
+                    <p><strong>Amount:</strong> ${currency} ${refundAmount.toFixed(2)}</p>
+                    <p><strong>Date:</strong> ${new Date(processedAt).toLocaleDateString()}</p>
+                    ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
+                  </div>
+
+                  <p>
+                    If you need help with this refund, reply to our support team and include the ticket number
+                    or order number above.
+                  </p>
+                </div>
+                <div class="footer">
+                  <p>Questions? Contact us at support@yourdomain.com</p>
+                  <p>&copy; ${new Date().getFullYear()} Marketplace. All rights reserved.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `,
+      });
+    } catch (error) {
+      console.error("Failed to send refund status email:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Send password reset link email
+   */
+  async sendPasswordReset(data: {
+    to: string;
+    customerName: string;
+    resetUrl: string;
+    expiresAt: string;
+  }) {
+    try {
+      const { to, customerName, resetUrl, expiresAt } = data;
+
+      await sendTransactionalEmail({
+        emailType: "password_reset",
+        from: "Marketplace <security@yourdomain.com>",
+        to,
+        subject: "Reset Your Mercato Password",
+        metadata: { resetUrl },
+        html: `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: 'IBM Plex Sans', Arial, sans-serif; line-height: 1.6; color: #1a1f2e; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: #1a1f2e; color: white; padding: 30px; text-align: center; }
+                .content { background: #fefdfb; padding: 30px; }
+                .button { display: inline-block; background: #d65a31; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; margin: 20px 0; }
+                .footer { text-align: center; color: #6b7280; font-size: 14px; margin-top: 30px; }
+                .small { color: #6b7280; font-size: 12px; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h1>Password Reset</h1>
+                </div>
+                <div class="content">
+                  <p>Hi ${customerName},</p>
+                  <p>We received a request to reset the password for your Mercato account.</p>
+
+                  <center>
+                    <a href="${resetUrl}" class="button">
+                      Reset Password
+                    </a>
+                  </center>
+
+                  <p class="small">
+                    This link expires on ${new Date(expiresAt).toLocaleString()}.
+                    If you did not request this reset, ignore this message.
+                  </p>
+
+                  <p class="small">
+                    If the button does not work, copy and paste this URL:
+                    <br />
+                    <a href="${resetUrl}">${resetUrl}</a>
+                  </p>
+                </div>
+                <div class="footer">
+                  <p>Need help? Contact support@yourdomain.com</p>
+                  <p>&copy; ${new Date().getFullYear()} Marketplace. All rights reserved.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `,
+      });
+    } catch (error) {
+      console.error("Failed to send password reset email:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Send support notification for ticket/message updates
+   */
+  async sendSupportNotification(data: {
+    to: string;
+    ticketNumber: string;
+    subject: string;
+    updateType: "ticket_created" | "ticket_updated" | "message_added";
+    actorName?: string;
+    status?: string;
+    message?: string;
+    ticketUrl?: string;
+  }) {
+    try {
+      const {
+        to,
+        ticketNumber,
+        subject,
+        updateType,
+        actorName,
+        status,
+        message,
+        ticketUrl,
+      } = data;
+
+      const statusLine = status ? `<p><strong>Current status:</strong> ${status}</p>` : "";
+      const messageLine = message ? `<p><strong>Latest update:</strong> ${message}</p>` : "";
+
+      await sendTransactionalEmail({
+        emailType: "support_notification",
+        from: "Marketplace <support@yourdomain.com>",
+        to,
+        subject: `Support ${updateType.replaceAll("_", " ")} - ${ticketNumber}`,
+        metadata: { ticketNumber, updateType, status },
+        html: `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: 'IBM Plex Sans', Arial, sans-serif; line-height: 1.6; color: #1a1f2e; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: #1a1f2e; color: white; padding: 30px; text-align: center; }
+                .content { background: #fefdfb; padding: 30px; }
+                .card { background: white; border-left: 4px solid #d65a31; padding: 15px; margin: 20px 0; }
+                .footer { text-align: center; color: #6b7280; font-size: 14px; margin-top: 30px; }
+                .button { display: inline-block; background: #d65a31; color: white; padding: 10px 24px; text-decoration: none; border-radius: 4px; margin: 16px 0; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h1>Support Update</h1>
+                </div>
+                <div class="content">
+                  <p>Hi,</p>
+                  <p>${actorName ? `${actorName} updated` : "A support update was posted"} for ticket <strong>${ticketNumber}</strong>.</p>
+                  <div class="card">
+                    <p><strong>Subject:</strong> ${subject}</p>
+                    <p><strong>Type:</strong> ${updateType.replaceAll("_", " ")}</p>
+                    ${statusLine}
+                    ${messageLine}
+                  </div>
+                  ${ticketUrl ? `<a href="${ticketUrl}" class="button">Open Ticket</a>` : ""}
+                  <p>If this was not expected, contact support for review.</p>
+                </div>
+                <div class="footer">
+                  <p>Questions? Contact us at support@yourdomain.com</p>
+                  <p>&copy; ${new Date().getFullYear()} Marketplace. All rights reserved.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `,
+      });
+    } catch (error) {
+      console.error("Failed to send support notification email:", error);
       throw error;
     }
   },
