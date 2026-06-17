@@ -17,6 +17,16 @@ export interface FooterSectionConfig {
   links: FooterLinkConfig[];
 }
 
+export interface SellerCampaignSlotConfig {
+  title: string;
+  window: string;
+  eligibility: string;
+  discount: string;
+  channel: string;
+  type?: "campaign" | "drzflash";
+  status?: "active" | "draft" | "ended";
+}
+
 export const pakistanMajorCities = [
   "Karachi",
   "Lahore",
@@ -89,6 +99,45 @@ export const defaultFooterSections: FooterSectionConfig[] = [
       { label: "Returns & Replacements", href: "/returns" },
       { label: "Help Center", href: "/help" },
     ],
+  },
+];
+
+export const defaultSellerCampaignSlots: SellerCampaignSlotConfig[] = [
+  {
+    title: "Mid Month Mega Campaign",
+    window: "Jun 15 - Jun 20",
+    eligibility: "Approved products with stock above 10 units",
+    discount: "5% - 20%",
+    channel: "Homepage + category slots",
+    type: "campaign",
+    status: "active",
+  },
+  {
+    title: "Electronics Week",
+    window: "Jun 22 - Jun 29",
+    eligibility: "Electronics, computers and accessories",
+    discount: "8% - 25%",
+    channel: "Category campaign",
+    type: "campaign",
+    status: "active",
+  },
+  {
+    title: "Payday Deals",
+    window: "Jul 01 - Jul 05",
+    eligibility: "All active sellers with ready stock",
+    discount: "Flat or percentage voucher",
+    channel: "Campaign landing page",
+    type: "campaign",
+    status: "active",
+  },
+  {
+    title: "Flash Deal Rush",
+    window: "Admin scheduled flash sale",
+    eligibility: "Approved products with ready stock and competitive pricing",
+    discount: "Limited-time flash discount",
+    channel: "DrzFlash slot",
+    type: "drzflash",
+    status: "active",
   },
 ];
 

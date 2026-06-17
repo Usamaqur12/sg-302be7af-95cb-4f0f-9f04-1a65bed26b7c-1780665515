@@ -6,11 +6,14 @@ import {
   BarChart3,
   Ban,
   CheckCircle2,
+  Megaphone,
   MousePointerClick,
   PauseCircle,
   PlayCircle,
+  PlusCircle,
   Search,
   ShieldCheck,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { AdminLayout } from "@/components/AdminLayout";
@@ -27,6 +30,10 @@ import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { useToast } from "@/hooks/use-toast";
 import { campaignCpc, campaignCtr, campaignRoas, type MarketingCampaignStatus } from "@/lib/marketing";
 import { getErrorMessage } from "@/lib/errors";
+import {
+  defaultSellerCampaignSlots,
+  type SellerCampaignSlotConfig,
+} from "@/lib/marketplace-config";
 import { supabase } from "@/integrations/supabase/client";
 
 interface MarketingCampaign {
@@ -85,7 +92,51 @@ interface CampaignForm {
   rejection_reason: string;
 }
 
+interface CampaignSlotForm {
+  title: string;
+  window: string;
+  eligibility: string;
+  discount: string;
+  channel: string;
+  type: "campaign" | "drzflash";
+  status: "active" | "draft" | "ended";
+}
+
 const statusOptions: MarketingCampaignStatus[] = ["pending", "approved", "active", "paused", "rejected", "ended"];
+const campaignSlotSettingKey = "seller_campaign_slots_json";
+const campaignSlotDescription = "Admin-created campaign invitations shown in Seller Marketing Center";
+const defaultCampaignSlotForm: CampaignSlotForm = {
+  title: "",
+  window: "",
+  eligibility: "Approved products with ready stock",
+  discount: "5% - 20%",
+  channel: "Homepage + category slots",
+  type: "campaign",
+  status: "active",
+};
+
+function parseCampaignSlots(value: unknown): SellerCampaignSlotConfig[] {
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (!Array.isArray(parsed)) return defaultSellerCampaignSlots;
+    const slots: SellerCampaignSlotConfig[] = parsed
+      .map((slot) => ({
+        title: String(slot?.title ?? "").trim(),
+        window: String(slot?.window ?? "").trim(),
+        eligibility: String(slot?.eligibility ?? "").trim(),
+        discount: String(slot?.discount ?? "").trim(),
+        channel: String(slot?.channel ?? "").trim(),
+        type: (slot?.type === "drzflash" ? "drzflash" : "campaign") as SellerCampaignSlotConfig["type"],
+        status: slot?.status === "draft" || slot?.status === "ended"
+          ? slot.status as SellerCampaignSlotConfig["status"]
+          : "active",
+      }))
+      .filter((slot) => slot.title && slot.window && slot.eligibility && slot.discount && slot.channel);
+    return slots.length ? slots : defaultSellerCampaignSlots;
+  } catch {
+    return defaultSellerCampaignSlots;
+  }
+}
 
 function inputDateTime(value: string | null) {
   if (!value) return "";
@@ -115,11 +166,15 @@ export default function AdminMarketingPage() {
   const { formatPrice } = useMarketplaceSettings();
   const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
+  const [campaignSlots, setCampaignSlots] =
+    useState<SellerCampaignSlotConfig[]>(defaultSellerCampaignSlots);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [statusFilter, setStatusFilter] = useState<MarketingCampaignStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingSlot, setSavingSlot] = useState(false);
+  const [slotForm, setSlotForm] = useState<CampaignSlotForm>(defaultCampaignSlotForm);
   const [form, setForm] = useState<CampaignForm>({
     status: "pending",
     daily_budget: "0",
@@ -136,25 +191,33 @@ export default function AdminMarketingPage() {
 
   const loadCampaigns = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("marketing_campaigns")
-      .select(`
-        *,
-        seller:seller_profiles!seller_id(business_name, status, account_health_status),
-        product:products!product_id(title, status, stock_quantity, rating, total_reviews)
-      `)
-      .order("created_at", { ascending: false });
+    const [campaignResult, slotSettingResult] = await Promise.all([
+      supabase
+        .from("marketing_campaigns")
+        .select(`
+          *,
+          seller:seller_profiles!seller_id(business_name, status, account_health_status),
+          product:products!product_id(title, status, stock_quantity, rating, total_reviews)
+        `)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("system_settings")
+        .select("key, value")
+        .eq("key", campaignSlotSettingKey)
+        .maybeSingle(),
+    ]);
 
-    if (error) {
-      toast({ title: "Marketing unavailable", description: error.message, variant: "destructive" });
+    if (campaignResult.error) {
+      toast({ title: "Marketing unavailable", description: campaignResult.error.message, variant: "destructive" });
       setLoading(false);
       return;
     }
 
-    const nextCampaigns = ((data ?? []) as unknown as MarketingCampaign[]).filter((campaign) =>
+    const nextCampaigns = ((campaignResult.data ?? []) as unknown as MarketingCampaign[]).filter((campaign) =>
       isAdCampaignType(campaign.campaign_type)
     );
     setCampaigns(nextCampaigns);
+    setCampaignSlots(parseCampaignSlots(slotSettingResult.data?.value));
     setSelectedCampaignId((current) => current || nextCampaigns[0]?.id || "");
     setLoading(false);
   }, [toast]);
@@ -249,6 +312,118 @@ export default function AdminMarketingPage() {
     }
   };
 
+  const persistCampaignSlots = async (nextSlots: SellerCampaignSlotConfig[]) => {
+    const cleanedSlots: SellerCampaignSlotConfig[] = nextSlots
+      .map((slot) => ({
+        title: slot.title.trim(),
+        window: slot.window.trim(),
+        eligibility: slot.eligibility.trim(),
+        discount: slot.discount.trim(),
+        channel: slot.channel.trim(),
+        type: (slot.type === "drzflash" ? "drzflash" : "campaign") as SellerCampaignSlotConfig["type"],
+        status: (slot.status === "draft" || slot.status === "ended" ? slot.status : "active") as SellerCampaignSlotConfig["status"],
+      }))
+      .filter((slot) => slot.title && slot.window && slot.eligibility && slot.discount && slot.channel);
+    const value = JSON.stringify(cleanedSlots);
+    const { data: existing, error: lookupError } = await supabase
+      .from("system_settings")
+      .select("id")
+      .eq("key", campaignSlotSettingKey)
+      .maybeSingle();
+
+    if (lookupError) throw lookupError;
+
+    const result = existing?.id
+      ? await supabase
+          .from("system_settings")
+          .update({ value, description: campaignSlotDescription })
+          .eq("id", existing.id)
+      : await supabase
+          .from("system_settings")
+          .insert({
+            id: crypto.randomUUID(),
+            key: campaignSlotSettingKey,
+            value,
+            description: campaignSlotDescription,
+          });
+
+    if (result.error) throw result.error;
+    setCampaignSlots(cleanedSlots);
+  };
+
+  const createCampaignSlot = async () => {
+    if (!slotForm.title.trim() || !slotForm.window.trim()) {
+      toast({
+        title: "Campaign details required",
+        description: "Add a campaign name and campaign window before publishing.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingSlot(true);
+    try {
+      const nextSlot: SellerCampaignSlotConfig = {
+        title: slotForm.title,
+        window: slotForm.window,
+        eligibility: slotForm.eligibility,
+        discount: slotForm.discount,
+        channel: slotForm.channel,
+        type: slotForm.type,
+        status: slotForm.status,
+      };
+      await persistCampaignSlots([nextSlot, ...campaignSlots]);
+      setSlotForm(defaultCampaignSlotForm);
+      toast({
+        title: "Campaign invitation published",
+        description: "Sellers can now see this campaign in Marketing Center.",
+      });
+    } catch (error) {
+      toast({
+        title: "Campaign publish failed",
+        description: getErrorMessage(error, "Could not publish this campaign invitation."),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSlot(false);
+    }
+  };
+
+  const updateCampaignSlotStatus = async (index: number, status: SellerCampaignSlotConfig["status"]) => {
+    setSavingSlot(true);
+    try {
+      const nextSlots = campaignSlots.map((slot, slotIndex) =>
+        slotIndex === index ? { ...slot, status } : slot
+      );
+      await persistCampaignSlots(nextSlots);
+      toast({ title: "Campaign invitation updated" });
+    } catch (error) {
+      toast({
+        title: "Campaign update failed",
+        description: getErrorMessage(error, "Could not update campaign invitation."),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSlot(false);
+    }
+  };
+
+  const removeCampaignSlot = async (index: number) => {
+    setSavingSlot(true);
+    try {
+      await persistCampaignSlots(campaignSlots.filter((_, slotIndex) => slotIndex !== index));
+      toast({ title: "Campaign invitation removed" });
+    } catch (error) {
+      toast({
+        title: "Campaign removal failed",
+        description: getErrorMessage(error, "Could not remove campaign invitation."),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSlot(false);
+    }
+  };
+
   return (
     <RoleGuard allowedRoles={["admin"]}>
       <AdminLayout>
@@ -269,6 +444,120 @@ export default function AdminMarketingPage() {
             <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">CTR</p><p className="mt-2 text-2xl font-bold">{campaignCtr(totals.clicks, totals.impressions).toFixed(1)}%</p></CardContent></Card>
             <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">ROAS</p><p className="mt-2 text-2xl font-bold">{campaignRoas(totals.revenue, totals.spend).toFixed(2)}x</p></CardContent></Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-accent" />
+                Marketplace Campaign Invitations
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <Label>Campaign Name</Label>
+                    <Input
+                      value={slotForm.title}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, title: event.target.value }))}
+                      placeholder="e.g. 8.8 Mega Campaign"
+                    />
+                  </div>
+                  <div>
+                    <Label>Window</Label>
+                    <Input
+                      value={slotForm.window}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, window: event.target.value }))}
+                      placeholder="Aug 08 - Aug 12"
+                    />
+                  </div>
+                  <div>
+                    <Label>Type</Label>
+                    <Select value={slotForm.type} onValueChange={(value) => setSlotForm((current) => ({ ...current, type: value as CampaignSlotForm["type"] }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="campaign">Campaign</SelectItem>
+                        <SelectItem value="drzflash">DrzFlash</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <Select value={slotForm.status} onValueChange={(value) => setSlotForm((current) => ({ ...current, status: value as CampaignSlotForm["status"] }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="ended">Ended</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Discount Range</Label>
+                    <Input
+                      value={slotForm.discount}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, discount: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>Channel</Label>
+                    <Input
+                      value={slotForm.channel}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, channel: event.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Eligibility</Label>
+                    <Textarea
+                      rows={3}
+                      value={slotForm.eligibility}
+                      onChange={(event) => setSlotForm((current) => ({ ...current, eligibility: event.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Button onClick={createCampaignSlot} disabled={savingSlot}>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Publish Campaign Invitation
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {campaignSlots.map((slot, index) => (
+                    <div key={`${slot.title}-${index}`} className="rounded-md border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{slot.title}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{slot.window} - {slot.channel}</p>
+                        </div>
+                        <Badge className={statusBadge((slot.status || "active") as MarketingCampaignStatus)}>
+                          {slot.status || "active"}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                        <span>{slot.type === "drzflash" ? "DrzFlash" : "Campaign"}</span>
+                        <span>{slot.discount}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={() => updateCampaignSlotStatus(index, "active")} disabled={savingSlot}>Publish</Button>
+                        <Button size="sm" variant="outline" onClick={() => updateCampaignSlotStatus(index, "draft")} disabled={savingSlot}>Draft</Button>
+                        <Button size="sm" variant="outline" onClick={() => updateCampaignSlotStatus(index, "ended")} disabled={savingSlot}>End</Button>
+                        <Button size="sm" variant="destructive" onClick={() => removeCampaignSlot(index)} disabled={savingSlot}>
+                          <Trash2 className="mr-2 h-3.5 w-3.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {campaignSlots.length === 0 && (
+                    <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      No seller campaign invitations yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_220px]">

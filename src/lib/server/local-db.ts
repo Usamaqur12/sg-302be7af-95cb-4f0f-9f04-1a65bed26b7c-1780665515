@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import bcrypt from "bcryptjs";
 import {
   defaultFooterSections,
+  defaultSellerCampaignSlots,
   flatMarketplaceCategories,
 } from "../marketplace-config";
 import { calculatePromotionSummary, type PromotionLike } from "../promotions";
@@ -191,6 +192,11 @@ const DEFAULT_SYSTEM_SETTINGS = [
     key: "seller_center_campaign_name",
     value: "11.11 Growth Guide",
     description: "Featured seller education campaign",
+  },
+  {
+    key: "seller_campaign_slots_json",
+    value: JSON.stringify(defaultSellerCampaignSlots, null, 2),
+    description: "Admin-created campaign invitations shown in Seller Marketing Center",
   },
   {
     key: "seller_center_enabled_options",

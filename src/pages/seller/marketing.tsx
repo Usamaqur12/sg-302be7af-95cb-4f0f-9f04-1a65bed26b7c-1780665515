@@ -33,6 +33,10 @@ import { useMarketplaceSettings } from "@/contexts/MarketplaceSettingsContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { getErrorMessage } from "@/lib/errors";
+import {
+  defaultSellerCampaignSlots,
+  type SellerCampaignSlotConfig,
+} from "@/lib/marketplace-config";
 import { cn } from "@/lib/utils";
 
 type MarketingTool = "campaign" | "drzflash" | "promotions" | "coins" | "programs" | "submissions";
@@ -132,30 +136,6 @@ const toolCopy: Record<MarketingTool, { title: string; description: string; badg
   },
 };
 
-const campaignSlots = [
-  {
-    title: "Mid Month Mega Campaign",
-    window: "Jun 15 - Jun 20",
-    eligibility: "Approved products with stock above 10 units",
-    discount: "5% - 20%",
-    channel: "Homepage + category slots",
-  },
-  {
-    title: "Electronics Week",
-    window: "Jun 22 - Jun 29",
-    eligibility: "Electronics, computers and accessories",
-    discount: "8% - 25%",
-    channel: "Category campaign",
-  },
-  {
-    title: "Payday Deals",
-    window: "Jul 01 - Jul 05",
-    eligibility: "All active sellers with ready stock",
-    discount: "Flat or percentage voucher",
-    channel: "Campaign landing page",
-  },
-];
-
 const promotionTools = [
   {
     value: "seller voucher",
@@ -176,6 +156,29 @@ const promotionTools = [
     icon: Sparkles,
   },
 ];
+
+function parseSellerCampaignSlots(value: unknown): SellerCampaignSlotConfig[] {
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (!Array.isArray(parsed)) return defaultSellerCampaignSlots;
+    const slots: SellerCampaignSlotConfig[] = parsed
+      .map((slot) => ({
+        title: String(slot?.title ?? "").trim(),
+        window: String(slot?.window ?? "").trim(),
+        eligibility: String(slot?.eligibility ?? "").trim(),
+        discount: String(slot?.discount ?? "").trim(),
+        channel: String(slot?.channel ?? "").trim(),
+        type: (slot?.type === "drzflash" ? "drzflash" : "campaign") as SellerCampaignSlotConfig["type"],
+        status: slot?.status === "draft" || slot?.status === "ended"
+          ? slot.status as SellerCampaignSlotConfig["status"]
+          : "active",
+      }))
+      .filter((slot) => slot.title && slot.window && slot.eligibility && slot.discount && slot.channel);
+    return slots.length ? slots : defaultSellerCampaignSlots;
+  } catch {
+    return defaultSellerCampaignSlots;
+  }
+}
 
 const programCards = [
   "Fulfillment readiness",
@@ -222,6 +225,8 @@ export default function SellerMarketingPage() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [promotionRequests, setPromotionRequests] = useState<PromotionRequest[]>([]);
+  const [sellerCampaignSlots, setSellerCampaignSlots] =
+    useState<SellerCampaignSlotConfig[]>(defaultSellerCampaignSlots);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [requestType, setRequestType] = useState("campaign");
@@ -254,7 +259,7 @@ export default function SellerMarketingPage() {
     const sellerProfile = (sellerResult.data ?? null) as SellerProfile | null;
     setSeller(sellerProfile);
 
-    const [couponResult, ticketResult, productResult, promotionResult] = await Promise.all([
+    const [couponResult, ticketResult, productResult, promotionResult, campaignSettingResult] = await Promise.all([
       supabase
         .from("coupons")
         .select("id, code, description, discount_type, discount_value, valid_until, is_active")
@@ -283,12 +288,18 @@ export default function SellerMarketingPage() {
             .order("created_at", { ascending: false })
             .limit(50)
         : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("system_settings")
+        .select("key, value")
+        .eq("key", "seller_campaign_slots_json")
+        .maybeSingle(),
     ]);
 
     setCoupons((couponResult.data ?? []) as unknown as Coupon[]);
     setTickets((ticketResult.data ?? []) as unknown as SupportTicket[]);
     setProducts((productResult.data ?? []) as unknown as SellerProduct[]);
     setPromotionRequests((promotionResult.data ?? []) as unknown as PromotionRequest[]);
+    setSellerCampaignSlots(parseSellerCampaignSlots(campaignSettingResult.data?.value));
     setLoading(false);
   }, [user]);
 
@@ -425,15 +436,34 @@ export default function SellerMarketingPage() {
     );
   }, [formatPrice, legacyMarketingTickets, promotionRequests]);
 
-  const renderCampaignCards = (flashOnly = false) => (
-    <div className={cn("grid gap-4", viewMode === "calendar" ? "lg:grid-cols-3" : "lg:grid-cols-1")}>
-      {campaignSlots.map((slot) => (
+  const activeCampaignSlots = sellerCampaignSlots.filter((slot) => (slot.status || "active") === "active");
+
+  const renderCampaignCards = (flashOnly = false) => {
+    const slots = activeCampaignSlots.filter((slot) =>
+      flashOnly ? slot.type === "drzflash" : slot.type !== "drzflash"
+    );
+
+    if (slots.length === 0) {
+      return (
+        <div className="rounded-md border border-dashed p-10 text-center">
+          <Megaphone className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+          <p className="font-semibold">No admin campaigns are open right now.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            New marketplace campaign invitations will appear here when admin publishes them.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className={cn("grid gap-4", viewMode === "calendar" ? "lg:grid-cols-3" : "lg:grid-cols-1")}>
+      {slots.map((slot) => (
         <Card key={slot.title} className={cn(viewMode === "calendar" && "min-h-72")}>
           <CardContent className="p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <Badge variant="outline">{flashOnly ? "Flash Sale" : slot.channel}</Badge>
-                <h3 className="mt-3 text-lg font-semibold">{flashOnly ? `${slot.title} Flash Slot` : slot.title}</h3>
+                <Badge variant="outline">{slot.type === "drzflash" ? "Flash Sale" : slot.channel}</Badge>
+                <h3 className="mt-3 text-lg font-semibold">{slot.title}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">{slot.window}</p>
               </div>
               <Badge className="bg-green-500/10 text-green-700">{eligibleProducts.length} eligible</Badge>
@@ -449,9 +479,9 @@ export default function SellerMarketingPage() {
               </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button onClick={() => submitCampaign(slot.title, flashOnly ? "drzflash" : "campaign")} disabled={submitting}>
+              <Button onClick={() => submitCampaign(slot.title, slot.type === "drzflash" ? "drzflash" : "campaign")} disabled={submitting}>
                 <Send className="mr-2 h-4 w-4" />
-                {flashOnly ? "Submit Flash Products" : "Join Campaign"}
+                {slot.type === "drzflash" ? "Submit Flash Products" : "Join Campaign"}
               </Button>
               <Button asChild variant="outline">
                 <Link href="/seller/products">Review Products</Link>
@@ -461,7 +491,8 @@ export default function SellerMarketingPage() {
         </Card>
       ))}
     </div>
-  );
+    );
+  };
 
   const renderSubmissions = () => (
     <Card>

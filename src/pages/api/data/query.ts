@@ -195,6 +195,7 @@ const PUBLIC_SETTINGS_KEYS = new Set([
   "default_delivery_city",
   "footer_about_text",
   "footer_links_json",
+  "seller_campaign_slots_json",
   "theme_config",
   "homepage_sections",
   "public_pages_json",
